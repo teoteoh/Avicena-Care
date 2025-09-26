@@ -1,0 +1,77 @@
+                        """, unsafe_allow_html=True)
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
+                
+                with col_calculo:
+                    # Definir cores baseadas na urgência
+                    urgencia_colors = {
+                        'CRÍTICA': '#8B0000',
+                        'ALTA': '#DC143C', 
+                        'MODERADA': '#FF8C00',
+                        'BAIXA': '#32CD32',
+                        'NORMAL': '#228B22'
+                    }
+                    
+                    auto_urgencia = urgencia_calc[0]
+                    auto_color = urgencia_colors.get(auto_urgencia, '#1e40af')
+                    manual_color = urgencia_colors.get(urgencia, '#1e40af')
+                    
+                    st.markdown(f"""
+                    <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <div style="font-weight: 600; color: #1e40af; margin-bottom: 10px;">
+                            🎯 Análise de Urgência
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                                <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 5px;">Urgência Automática</div>
+                                <div style="font-size: 1.2rem; font-weight: 600; color: {auto_color}; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                    {urgencia_calc[2]} {auto_urgencia}
+                                </div>
+                            </div>
+                            
+                            <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                                <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 5px;">Urgência Manual</div>
+                                <div style="font-size: 1.2rem; font-weight: 600; color: {manual_color}; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                    {urgencia_emoji} {urgencia}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; align-items: center;">
+                            <div style="font-weight: 500; color: #64748b;">Pontuação:</div>
+                            <div style="color: #334155; font-weight: 500;">{urgencia_calc[4]} pontos</div>
+                            
+                            <div style="font-weight: 500; color: #64748b;">Descrição:</div>
+                            <div style="color: #334155;">{urgencia_calc[3]}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Alertas
+                    if urgencia_calc[5]:
+                        st.markdown("""
+                        <div style="background: #fff8e1; border-radius: 8px; padding: 15px; border-left: 4px solid #f59e0b;">
+                            <div style="font-weight: 600; color: #b45309; margin-bottom: 10px;">
+                                ⚠️ Alertas Identificados
+                            </div>
+                            <ul style="margin: 0; padding-left: 20px; color: #92400e;">
+                        """, unsafe_allow_html=True)
+                        
+                        for alerta in urgencia_calc[5]:
+                            st.markdown(f"<li>{alerta}</li>", unsafe_allow_html=True)
+                        
+                        st.markdown("</ul></div>", unsafe_allow_html=True)
+                
+                # Botão para fechar detalhes
+                st.markdown("""
+                <div style="margin-top: 20px;">
+                """, unsafe_allow_html=True)
+                
+                if st.button("❌ Fechar Detalhes", key=f"fechar_{idx}", use_container_width=True):
+                    del st.session_state[f'mostrar_detalhes_{idx}']
+                    st.rerun()
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                st.markdown("</div>", unsafe_allow_html=True)
