@@ -797,6 +797,16 @@ header[data-testid="stHeader"] { display: none !important; visibility: hidden !i
 }
 
 /* Customização do Streamlit */
+.new-patient .form-card .stSelectbox > div > div,
+.new-patient .form-card .stSelectbox label,
+.new-patient .form-card .stSelectbox div[data-baseweb="select"] *,
+.new-patient .form-card .stSelectbox .css-1wa3eu0-placeholder,
+.new-patient .form-card .stSelectbox .css-1uccc91-singleValue,
+.new-patient .form-card .stSelectbox .css-1okebmr-indicatorSeparator,
+.new-patient .form-card .stSelectbox .css-1pahdxg-control,
+.new-patient .form-card .stSelectbox .css-1n7v3ny-option {
+    color: #fff !important;
+}
 .stSelectbox > div > div {
     background-color: white;
 }
@@ -818,20 +828,6 @@ header[data-testid="stHeader"] { display: none !important; visibility: hidden !i
 }
 
 
-.stSelectbox > div > div {
-    background-color: white;
-    color: #111 !important;
-}
-
-.stSelectbox label,
-.stSelectbox div[data-baseweb="select"] *,
-.stSelectbox .css-1wa3eu0-placeholder,
-.stSelectbox .css-1uccc91-singleValue,
-.stSelectbox .css-1okebmr-indicatorSeparator,
-.stSelectbox .css-1pahdxg-control,
-.stSelectbox .css-1n7v3ny-option {
-    color: #111 !important;
-}
 
 /* Melhorias nos botões */
 .stButton > button {
@@ -1110,6 +1106,78 @@ header[data-testid="stHeader"] { display: none !important; visibility: hidden !i
 .pcacr-blue .pcacr-dot { background: #2563eb; }
 
 /* ========== Novo Paciente: Formulário Elegante ========== */
+.new-patient .form-card *,
+.new-patient .form-card .stSelectbox *,
+.new-patient .form-card .stSelectbox label,
+.new-patient .form-card .stSelectbox div[data-baseweb="select"] *,
+.new-patient .form-card .stSelectbox .css-1wa3eu0-placeholder,
+.new-patient .form-card .stSelectbox .css-1uccc91-singleValue,
+.new-patient .form-card .stSelectbox .css-1okebmr-indicatorSeparator,
+.new-patient .form-card .stSelectbox .css-1pahdxg-control,
+.new-patient .form-card .stSelectbox .css-1n7v3ny-option,
+.new-patient .form-card .stSelectbox .css-1jqq78o-option,
+.new-patient .form-card .stSelectbox .css-1jqq78o-singleValue,
+.new-patient .form-card .stSelectbox .css-1jqq78o-placeholder,
+.new-patient .form-card .stSelectbox .css-1jqq78o-control,
+.new-patient .form-card .stSelectbox .css-1jqq78o-label,
+.new-patient .form-card .stNumberInput label,
+.new-patient .form-card .stNumberInput input,
+.new-patient .form-card .stTextInput label,
+.new-patient .form-card .stTextInput input,
+.new-patient .form-card select,
+.new-patient .form-card option {
+    color: #fff !important;
+}
+.new-patient .form-card,
+.new-patient .form-card * {
+    color: #fff !important;
+}
+.new-patient .form-card input,
+.new-patient .form-card textarea,
+.new-patient .form-card select {
+    color: #fff !important;
+    background: #111 !important;
+}
+.new-patient .form-card label,
+.new-patient .form-card .stSelectbox label,
+.new-patient .form-card .stSelectbox .css-1wa3eu0-placeholder,
+.new-patient .form-card .stSelectbox .css-1uccc91-singleValue,
+.new-patient .form-card .stSelectbox .css-1okebmr-indicatorSeparator,
+.new-patient .form-card .stSelectbox .css-1pahdxg-control,
+.new-patient .form-card .stSelectbox .css-1n7v3ny-option,
+.new-patient .form-card .stSelectbox .css-1jqq78o-option,
+.new-patient .form-card .stSelectbox .css-1jqq78o-singleValue,
+.new-patient .form-card .stSelectbox .css-1jqq78o-placeholder,
+.new-patient .form-card .stSelectbox .css-1jqq78o-control,
+.new-patient .form-card .stSelectbox .css-1jqq78o-label,
+.new-patient .form-card .stNumberInput label,
+.new-patient .form-card .stNumberInput input,
+.new-patient .form-card .stTextInput label,
+.new-patient .form-card .stTextInput input {
+    color: #fff !important;
+}
+.new-patient .form-card .stSelectbox label,
+.new-patient .form-card .stSelectbox .css-1wa3eu0-placeholder,
+.new-patient .form-card .stSelectbox .css-1uccc91-singleValue,
+.new-patient .form-card .stSelectbox .css-1okebmr-indicatorSeparator,
+.new-patient .form-card .stSelectbox .css-1pahdxg-control,
+.new-patient .form-card .stSelectbox .css-1n7v3ny-option {
+    color: #fff !important;
+}
+.new-patient label,
+.new-patient .form-card label,
+.new-patient .form-card .stSelectbox label,
+.new-patient .form-card .stNumberInput label,
+.new-patient .form-card .css-1c7y2kd,
+.new-patient .form-card .css-1c7y2kd label,
+.new-patient .form-card .css-1n6v2fa label {
+    color: #fff !important;
+}
+.new-patient .form-card label,
+.new-patient .form-card .stSelectbox label,
+.new-patient .form-card .stNumberInput label {
+    color: #fff !important;
+}
 .new-patient .form-header{display:flex;align-items:center;gap:12px;margin:6px 0 16px 0;padding:12px 14px;background:linear-gradient(90deg,#036672,#059669);border:1px solid rgba(255,255,255,0.18);border-radius:14px;color:#fff;box-shadow:0 4px 14px rgba(3,102,114,0.22)}
 .new-patient .form-header-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,0.18);font-weight:800}
 .new-patient .form-header-text h3{margin:0;font-size:1.05rem;font-weight:800}
