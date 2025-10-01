@@ -801,12 +801,36 @@ header[data-testid="stHeader"] { display: none !important; visibility: hidden !i
     background-color: white;
 }
 
+
 .stTextInput > div > div > input {
     background-color: white;
+    color: #111 !important;
 }
 
 .stTextArea > div > div > textarea {
     background-color: white;
+    color: #111 !important;
+}
+
+.stNumberInput input {
+    background-color: white;
+    color: #111 !important;
+}
+
+
+.stSelectbox > div > div {
+    background-color: white;
+    color: #111 !important;
+}
+
+.stSelectbox label,
+.stSelectbox div[data-baseweb="select"] *,
+.stSelectbox .css-1wa3eu0-placeholder,
+.stSelectbox .css-1uccc91-singleValue,
+.stSelectbox .css-1okebmr-indicatorSeparator,
+.stSelectbox .css-1pahdxg-control,
+.stSelectbox .css-1n7v3ny-option {
+    color: #111 !important;
 }
 
 /* Melhorias nos botões */
@@ -1134,11 +1158,11 @@ header[data-testid="stHeader"] { display: none !important; visibility: hidden !i
 
 /* Priority styling */
 .priority-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px}
-.priority-badge.priority-maxima{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
-.priority-badge.priority-alta{background:#fed7aa;color:#c2410c;border:1px solid #fdba74}
-.priority-badge.priority-media{background:#fef3c7;color:#a16207;border:1px solid #fcd34d}
-.priority-badge.priority-baixa{background:#d1fae5;color:#059669;border:1px solid #6ee7b7}
-.priority-badge.priority-minima{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd}
+.priority-badge.priority-maxima{background:#b91c1c;color:#fff;border:1px solid #7f1d1d}
+.priority-badge.priority-alta{background:#f97316;color:#fff;border:1px solid #c2410c}
+.priority-badge.priority-media{background:#eab308;color:#1f2937;border:1px solid #a16207}
+.priority-badge.priority-baixa{background:#16a34a;color:#fff;border:1px solid #15803d}
+.priority-badge.priority-minima{background:#2563eb;color:#fff;border:1px solid #1d4ed8}
 
 /* Vital signs badges */
 .vital-badge{display:inline-block;padding:4px 8px;border-radius:12px;font-size:.75rem;font-weight:700;color:#1f2937}
@@ -1166,6 +1190,7 @@ header[data-testid="stHeader"] { display: none !important; visibility: hidden !i
 .priority-summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .summary-title{font-weight:700;color:#374151;font-size:.85rem}
 .summary-badge{display:inline-block;padding:4px 8px;border-radius:12px;font-size:.7rem;font-weight:700;margin-right:6px}
+.summary-badge.maxima{background:#b91c1c;color:#fff;border:1px solid #7f1d1d}
 
 /* Priority row colors */
 .priority-row-maxima {

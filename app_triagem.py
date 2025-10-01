@@ -148,101 +148,105 @@ def calcular_score_clinico(temp, pa_sist, pa_diast, fr, fc, idade):
     return score, classificacao, alertas
 
 # Função para calcular urgência baseada em sinais vitais
-def calcular_urgencia(temperatura, pa_sistolica, pa_diastolica, freq_respiratoria, freq_cardiaca, idade):
+def calcular_urgencia(temperatura, pa_sistolica, pa_diastolica, freq_respiratoria, freq_cardiaca, idade, spo2=None, nivel_consciencia="Alerta"):
     """
-    Calcula o nível de urgência baseado nos sinais vitais
-    Retorna: (nivel, cor, emoji, descricao, pontuacao)
+    Triagem por pontos ampliada, conforme parâmetros e faixas sugeridas pelo usuário.
+    Retorna: (nivel, cor, emoji, descricao, pontuacao, alertas)
     """
-    pontuacao = 0
+    pontos = 0
     alertas = []
-    
-    # TEMPERATURA - Valores normais: 36.1-37.2°C
-    if temperatura >= 39.0:
-        pontuacao += 3
+
+    # FR
+    if freq_respiratoria <= 8 or freq_respiratoria >= 25:
+        pontos += 3
+        alertas.append("FR crítica")
+    elif 9 <= freq_respiratoria <= 11:
+        pontos += 1
+        alertas.append("FR levemente alterada")
+    elif 21 <= freq_respiratoria <= 24:
+        pontos += 2
+        alertas.append("FR moderada")
+    # 12-20 = 0 ponto
+
+    # SpO2
+    if spo2 is not None:
+        if spo2 <= 91:
+            pontos += 3
+            alertas.append("SpO₂ crítica")
+        elif 92 <= spo2 <= 93:
+            pontos += 2
+            alertas.append("SpO₂ moderada")
+        elif 94 <= spo2 <= 95:
+            pontos += 1
+            alertas.append("SpO₂ levemente alterada")
+        # >=96 = 0 ponto
+
+    # PA sistólica
+    if pa_sistolica <= 90 or pa_sistolica >= 220:
+        pontos += 3
+        alertas.append("PA sistólica crítica")
+    elif 91 <= pa_sistolica <= 100:
+        pontos += 2
+        alertas.append("PA sistólica moderada")
+    elif 101 <= pa_sistolica <= 110:
+        pontos += 1
+        alertas.append("PA sistólica levemente alterada")
+    # 111-219 = 0 ponto
+
+    # FC
+    if freq_cardiaca <= 40 or freq_cardiaca >= 131:
+        pontos += 3
+        alertas.append("FC crítica")
+    elif 41 <= freq_cardiaca <= 50:
+        pontos += 1
+        alertas.append("FC levemente alterada")
+    elif 51 <= freq_cardiaca <= 90:
+        pontos += 0
+    elif 91 <= freq_cardiaca <= 110:
+        pontos += 1
+        alertas.append("FC levemente alterada")
+    elif 111 <= freq_cardiaca <= 130:
+        pontos += 2
+        alertas.append("FC moderada")
+
+    # Temperatura
+    if temperatura <= 35.0:
+        pontos += 3
+        alertas.append("Hipotermia grave")
+    elif 35.1 <= temperatura <= 36.0:
+        pontos += 1
+        alertas.append("Temperatura levemente baixa")
+    elif 36.1 <= temperatura <= 37.0:
+        pontos += 0
+    elif 37.1 <= temperatura <= 39.0:
+        pontos += 1
+        alertas.append("Temperatura levemente elevada")
+    elif temperatura >= 39.1:
+        pontos += 2
         alertas.append("Febre alta")
-    elif temperatura >= 37.5:
-        pontuacao += 2
-        alertas.append("Febre")
-    elif temperatura >= 37.3:
-        pontuacao += 1
-        alertas.append("Temperatura elevada")
-    elif temperatura <= 35.0:
-        pontuacao += 3
-        alertas.append("Hipotermia")
-    
-    # PRESSÃO ARTERIAL - Valores normais: Sistólica 90-139, Diastólica 60-89
-    if pa_sistolica >= 180 or pa_diastolica >= 110:
-        pontuacao += 3
-        alertas.append("Hipertensão severa")
-    elif pa_sistolica >= 160 or pa_diastolica >= 100:
-        pontuacao += 2
-        alertas.append("Hipertensão moderada")
-    elif pa_sistolica >= 140 or pa_diastolica >= 90:
-        pontuacao += 1
-        alertas.append("Hipertensão leve")
-    elif pa_sistolica <= 90 or pa_diastolica <= 60:
-        pontuacao += 2
-        alertas.append("Hipotensão")
-    
-    # FREQUÊNCIA RESPIRATÓRIA - Valores normais por idade
-    # Adultos: 12-20 rpm, Idosos (>65): 12-25 rpm, Crianças: varia por idade
-    if idade >= 65:
-        fr_min, fr_max = 12, 25
-    elif idade >= 18:
-        fr_min, fr_max = 12, 20
-    elif idade >= 12:
-        fr_min, fr_max = 12, 25
+
+    # Nível de consciência
+    if nivel_consciencia.lower() == "alerta":
+        pontos += 0
     else:
-        fr_min, fr_max = 15, 30  # Crianças
-    
-    if freq_respiratoria >= fr_max + 10:
-        pontuacao += 3
-        alertas.append("Taquipneia severa")
-    elif freq_respiratoria >= fr_max + 5:
-        pontuacao += 2
-        alertas.append("Taquipneia moderada")
-    elif freq_respiratoria > fr_max:
-        pontuacao += 1
-        alertas.append("Taquipneia leve")
-    elif freq_respiratoria < fr_min - 5:
-        pontuacao += 2
-        alertas.append("Bradipneia")
-    
-    # FREQUÊNCIA CARDÍACA - Valores normais: 60-100 bpm (adultos)
-    if idade >= 18:
-        fc_min, fc_max = 60, 100
-    elif idade >= 12:
-        fc_min, fc_max = 70, 110
+        pontos += 3
+        alertas.append("Alteração de consciência")
+
+    # Regra de exceção: parâmetro crítico extremo
+    if freq_respiratoria <= 8 or freq_respiratoria >= 25 or spo2 is not None and spo2 <= 85 or pa_sistolica < 80 or freq_cardiaca < 40 or freq_cardiaca > 150 or nivel_consciencia.lower() != "alerta":
+        return ("PRIORIDADE MÁXIMA", "#dc2626", "🔴", "Atendimento imediato", pontos, alertas)
+
+    # Classificação por faixas de pontos
+    if pontos >= 7:
+        return ("PRIORIDADE MÁXIMA", "#dc2626", "�", "Atendimento imediato", pontos, alertas)
+    elif pontos >= 5:
+        return ("ALTA PRIORIDADE", "#ea580c", "�", "Muito urgente", pontos, alertas)
+    elif pontos >= 3:
+        return ("MÉDIA PRIORIDADE", "#eab308", "🟡", "Urgente", pontos, alertas)
+    elif pontos >= 1:
+        return ("BAIXA PRIORIDADE", "#16a34a", "🟢", "Pouco urgente", pontos, alertas)
     else:
-        fc_min, fc_max = 80, 120  # Crianças
-    
-    if freq_cardiaca >= fc_max + 20:
-        pontuacao += 3
-        alertas.append("Taquicardia severa")
-    elif freq_cardiaca >= fc_max + 10:
-        pontuacao += 2
-        alertas.append("Taquicardia moderada")
-    elif freq_cardiaca > fc_max:
-        pontuacao += 1
-        alertas.append("Taquicardia leve")
-    elif freq_cardiaca < fc_min - 10:
-        pontuacao += 2
-        alertas.append("Bradicardia")
-    elif freq_cardiaca < fc_min:
-        pontuacao += 1
-        alertas.append("FC baixa")
-    
-    # Determinar nível de urgência baseado na pontuação
-    if pontuacao >= 7:
-        return ("CRÍTICA", "#8B0000", "🚨", "Urgência crítica - atendimento imediato", pontuacao, alertas)
-    elif pontuacao >= 4:
-        return ("ALTA", "#FF4500", "🔴", "Urgência alta - atendimento prioritário", pontuacao, alertas)
-    elif pontuacao >= 2:
-        return ("MODERADA", "#FF8C00", "🟡", "Urgência moderada - acompanhar", pontuacao, alertas)
-    elif pontuacao >= 1:
-        return ("BAIXA", "#32CD32", "🟢", "Urgência baixa - monitorar", pontuacao, alertas)
-    else:
-        return ("NORMAL", "#228B22", "✅", "Sinais vitais normais", pontuacao, alertas)
+        return ("MÍNIMA (ELETIVA)", "#2563eb", "🔵", "Sem sinais agudos", pontos, alertas)
 
 ###############################
 # UTIL: CSS CRÍTICO (fallback)
@@ -669,7 +673,7 @@ with tab_fila:
                         nova_pa = st.text_input("PA:", value=dados_paciente.get('PA', '120/80'))
                         
                     with col2:
-                        nova_fc = st.number_input("FC (bpm):", value=int(dados_paciente.get('FC', 70)), min_value=40, max_value=200)
+                        nova_fc = st.number_input("FC (bpm):", value=int(dados_paciente.get('FC', 70)), min_value=30, max_value=200)
                         nova_fr = st.number_input("FR (rpm):", value=int(dados_paciente.get('FR', 16)), min_value=8, max_value=60)
                         nova_comorbidade = st.text_area("Comorbidade:", value=dados_paciente.get('Comorbidade', ''))
                         nova_queixa = st.text_area("Queixa:", value=dados_paciente.get('Queixa_Principal', ''))
@@ -762,11 +766,16 @@ with tab_fila:
         # Montar tabela estilizada (sem título visível)
         # Mapas
         mapa_prioridade = {
-            'CRÍTICA': ('MÁXIMA', 'maxima'),
+            'CRÍTICA': ('PRIORIDADE MÁXIMA', 'maxima'),
+            'PRIORIDADE MÁXIMA': ('PRIORIDADE MÁXIMA', 'maxima'),
             'ALTA': ('ALTA', 'alta'),
+            'ALTA PRIORIDADE': ('ALTA', 'alta'),
             'MODERADA': ('MÉDIA', 'media'),
+            'MÉDIA PRIORIDADE': ('MÉDIA', 'media'),
             'BAIXA': ('BAIXA', 'baixa'),
-            'NORMAL': ('MÍNIMA', 'minima')
+            'BAIXA PRIORIDADE': ('BAIXA', 'baixa'),
+            'NORMAL': ('MÍNIMA', 'minima'),
+            'MÍNIMA (ELETIVA)': ('MÍNIMA', 'minima')
         }
         # Ordenar por prioridade (tipo Excel) antes de renderizar
         ordem_urgencia = {'CRÍTICA': 0, 'ALTA': 1, 'MODERADA': 2, 'BAIXA': 3, 'NORMAL': 4}
@@ -948,7 +957,14 @@ with tab_fila:
             priority_counts = df_sorted['urgencia_manual'].fillna(df_sorted.get('urgencia_automatica', 'NORMAL')).value_counts()
             summary_badges = []
             for prio, count in priority_counts.items():
-                color_map = {'CRÍTICA': '#dc2626', 'ALTA': '#ea580c', 'MODERADA': '#eab308', 'BAIXA': '#16a34a', 'NORMAL': '#2563eb'}
+                color_map = {
+                    'CRÍTICA': '#dc2626',
+                    'PRIORIDADE MÁXIMA': '#b91c1c',
+                    'ALTA': '#ea580c',
+                    'MODERADA': '#eab308',
+                    'BAIXA': '#16a34a',
+                    'NORMAL': '#2563eb'
+                }
                 color = color_map.get(prio, '#64748b')
                 summary_badges.append(f'<span class="summary-badge" style="background: {color}; color: white;">{prio}: {count}</span>')
             
@@ -1447,6 +1463,11 @@ with tab_novo:
         with cols_pa[2]:
             pa_diastolica = st.number_input("Pressão Diastólica *", min_value=40, max_value=150, value=80, key="novo_pa_diast")
         st.markdown('</div>', unsafe_allow_html=True)
+
+        # Novos campos: Saturação de O₂ e Estado mental
+        st.markdown('<div class="form-card"><div class="form-card-title">🫁 Saturação de O₂ e Estado Mental</div>', unsafe_allow_html=True)
+        spo2 = st.number_input("Saturação de O₂ (%)", min_value=70, max_value=100, value=98, key="novo_spo2")
+        estado_mental = st.selectbox("Estado mental", ["Alerta", "Confuso", "Sonolento", "Resposta ao estímulo de voz", "Resposta ao estímulo de dor", "Sem resposta"], key="novo_estado_mental")
         st.markdown('</div>', unsafe_allow_html=True)
 
         # Card: Condições clínicas
@@ -1503,7 +1524,7 @@ with tab_novo:
             for k in [
                 "novo_nome","novo_idade","novo_pa_sist","novo_pa_diast","novo_temp",
                 "novo_fc","novo_fr","novo_comorb","novo_comorb_outra","novo_alergia",
-                "novo_alergia_outra","novo_queixa"
+                "novo_alergia_outra","novo_queixa","novo_spo2","novo_estado_mental"
             ]:
                 if k in st.session_state:
                     del st.session_state[k]
@@ -1533,7 +1554,7 @@ with tab_novo:
                 st.error("❌ Por favor, especifique a alergia no campo 'Outra'!")
             else:
                 pa_formatada = f"{pa_sistolica}/{pa_diastolica}"
-                urgencia_auto = calcular_urgencia(temperatura, pa_sistolica, pa_diastolica, freq_respiratoria, freq_cardiaca, idade)
+                urgencia_auto = calcular_urgencia(temperatura, pa_sistolica, pa_diastolica, freq_respiratoria, freq_cardiaca, idade, spo2, estado_mental)
                 urgencia_nivel = urgencia_auto[0]
                 try:
                     conn.execute(
@@ -1554,10 +1575,13 @@ with tab_novo:
                         'FC': [freq_cardiaca],
                         'FR': [freq_respiratoria],
                         'Temp': [temperatura],
+                        'SpO₂': [spo2],
+                        'Estado mental': [estado_mental],
                         'Comorbidade': [comorbidade],
                         'Alergia': [alergia],
                         'Queixa Principal': [queixa_principal.strip()],
-                        'Urgência': [f"{urgencia_auto[2]} {urgencia_nivel}"]
+                        'Urgência': [f"{urgencia_auto[2]} {urgencia_nivel}"],
+                        'Pontuação': [urgencia_auto[4]]
                     })
                     st.dataframe(dados_paciente, use_container_width=True)
 
@@ -1583,13 +1607,15 @@ with tab_novo:
         _fr = st.session_state.get("novo_fr", 18)
         _pa_s = st.session_state.get("novo_pa_sist", 120)
         _pa_d = st.session_state.get("novo_pa_diast", 80)
-        urg_prev = calcular_urgencia(_temp, _pa_s, _pa_d, _fr, _fc, _idade)
+        _spo2 = st.session_state.get("novo_spo2", 98)
+        _estado_mental = st.session_state.get("novo_estado_mental", "Alerta")
+        urg_prev = calcular_urgencia(_temp, _pa_s, _pa_d, _fr, _fc, _idade, _spo2, _estado_mental)
         classe_map = {
-            'CRÍTICA': 'max',
-            'ALTA': 'alta',
-            'MODERADA': 'media',
-            'BAIXA': 'baixa',
-            'NORMAL': 'min'
+            'PRIORIDADE MÁXIMA': 'max',
+            'ALTA PRIORIDADE': 'alta',
+            'MÉDIA PRIORIDADE': 'media',
+            'BAIXA PRIORIDADE': 'baixa',
+            'MÍNIMA (ELETIVA)': 'min'
         }
         urg_class = classe_map.get(urg_prev[0], 'min')
         st.markdown(f"""
