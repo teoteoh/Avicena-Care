@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+.conda/
+
+# Byte-compiled / optimized / DLL files
+*.pyo
+*.pyd
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# OneDrive temp files
+~$*
+
+# ML Models (large files, regenerate with train_model.py)
+models/*.pkl
+models/*.joblib
+
+# Dataset (very large file - 153MB)
+data/Dataset.csv
+
+# Misc
+*.bak
+*.tmp
