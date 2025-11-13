@@ -176,14 +176,13 @@ Avicena-Care/
 ├── scores_clinicos.py          # Scores clínicos (550+ linhas)
 ├── validacao_clinica.py        # Validação de segurança (117 linhas)
 ├── auth.py                     # Autenticação
-├── requirements.txt            # Dependências Python
+├── requirements.txt            # Dependências do projeto
 ├── iniciar_app.bat            # Script de inicialização
-├── avicena_auth.db            # Banco de dados SQLite
+├── avicena_auth.db            # Banco de dados (apenas para autenticação de usuários)
 ├── data/
 │   └── Dataset.csv            # Dataset de treino (153MB)
 ├── models/
 │   ├── pcacr_model.pkl        # Modelo treinado
-│   └── scaler.pkl             # Normalizador
 └── README.md                  # Esta documentação
 ```
 
@@ -298,27 +297,27 @@ Toda sobrescrita gera:
 
 ### Banco de Dados
 
-#### Tabela: `triagem`
+#### Tabela: `avicena_care.triagem` (em Databricks)
 ```sql
-CREATE TABLE triagem (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    Nome TEXT,
-    Idade INTEGER,
-    PA TEXT,
-    FC INTEGER,
-    FR INTEGER,
-    Temp REAL,
-    SpO2 INTEGER,
-    nivel_consciencia TEXT,
-    genero TEXT,
-    intensidade_dor INTEGER,
-    Comorbidade TEXT,
-    Alergia TEXT,
-    Queixa_Principal TEXT,
-    urgencia_automatica TEXT,
-    urgencia_manual TEXT,
-    status TEXT DEFAULT 'AGUARDANDO',
-    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE avicena_care.triagem (
+    id STRING,
+    Nome STRING,
+    Idade INT,
+    PA STRING,
+    FC INT,
+    FR INT,
+    Temp DOUBLE,
+    SpO2 INT,
+    nivel_consciencia STRING,
+    genero STRING,
+    intensidade_dor INT,
+    Comorbidade STRING,
+    Alergia STRING,
+    Queixa_Principal STRING,
+    urgencia_automatica STRING,
+    urgencia_manual STRING,
+    status STRING,
+    data_cadastro TIMESTAMP,
     data_atendimento TIMESTAMP
 )
 ```

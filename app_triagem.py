@@ -2637,88 +2637,7 @@ def mostrar_interface_enfermeiro_completa():
 
 def mostrar_interface_medico_completa():
     """Interface completa para médicos: Dashboard, Lista, Análise Clínica, Relatórios e Novo Paciente"""
-    
-    # Carregar dados
-    df = get_data()
-    
-    # CSS para link de logout
-    st.markdown("""
-    <style>
-    .logout-link {
-        color: #ffffff !important;
-        text-decoration: none !important;
-        font-size: 0.85rem;
-        font-weight: 400;
-        transition: opacity 0.2s;
-        cursor: pointer;
-        margin-left: 20px;
-    }
-    .logout-link:hover {
-        opacity: 0.8;
-        text-decoration: underline !important;
-        color: #ffffff !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Verificar logout via query params
-    if 'logout' in st.query_params:
-        st.session_state['tipo_acesso'] = None
-        st.query_params.clear()
-        st.rerun()
-    
-    # Botão de logout no sidebar (funcional)
-    with st.sidebar:
-        st.markdown("---")
-        if st.button("🚪 Sair", key="logout_medico", use_container_width=True, type="secondary"):
-            st.session_state['tipo_acesso'] = None
-            st.rerun()
-    
-    # Header principal - médico tem acesso completo
-    brand_header = """
-    <div class='ac-global-header'>
-        <div class='ac-header-wrap'>
-                <div class='ac-brand'>
-                        <div class='ac-logo'>🏥</div>
-                        <div class='ac-text'>
-                                    <div class='ac-title'>Avicena Care - Acesso Médico</div>
-                                    <div class='ac-sub'>Protocolo Catarinense de Acolhimento (PCACR)</div>
-                        </div>
-                </div>
-                <div style='display: flex; align-items: center;'>
-                    <div class='ac-status-pill'><span></span> PCACR Ativo</div>
-                    <a href='?logout=true' class='logout-link' target='_self'>🚪 Sair</a>
-                </div>
-        </div>
-    </div>
-    """
-    st.markdown(brand_header, unsafe_allow_html=True)
-    
-    # Dashboard (mesmo da enfermagem)
-    mostrar_dashboard_kpis(df)
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    
-    # Tabs: Lista, Análise Clínica, Análise Preditiva e Relatórios (médico não tem acesso a Novo Paciente)
-    if ML_AVAILABLE:
-        tab_lista, tab_analise, tab_ml, tab_relatorios = st.tabs([
-            "🧾 Fila de Atendimento", 
-            "📊 Análise Clínica",
-            "🤖 Análise Preditiva",
-            "📋 Relatórios"
-        ])
-    else:
-        tab_lista, tab_analise, tab_relatorios = st.tabs([
-            "🧾 Fila de Atendimento", 
-            "📊 Análise Clínica",
-            "📋 Relatórios"
-        ])
-    
-    with tab_lista:
-        mostrar_fila_pacientes(df)
-    
-    with tab_analise:
-        mostrar_analise_clinica(df)
-    
+
     if ML_AVAILABLE:
         with tab_ml:
             st.markdown("### 🤖 Análise Preditiva Baseada em ML")
@@ -2740,9 +2659,9 @@ def mostrar_interface_medico_completa():
                     pa_diastolica = int(pa_parts[1]) if len(pa_parts) > 1 else 80 # type: ignore
                     
                     # Carregar dados adicionais (com valores padrão para registros antigos)
-                    spo2_valor = int(paciente['SpO2']) if 'SpO2' in paciente and paciente['SpO2'] else 95
-                    nivel_consciencia_valor = paciente['nivel_consciencia'] if 'nivel_consciencia' in paciente and paciente['nivel_consciencia'] else 'Alerta'
-                    genero_valor = paciente['genero'] if 'genero' in paciente and paciente['genero'] else 'Feminino'
+                    spo2_valor = int(paciente['SpO2']) if 'SpO2' in paciente and pd.notna(paciente['SpO2']) else 95
+                    nivel_consciencia_valor = paciente['nivel_consciencia'] if 'nivel_consciencia' in paciente and pd.notna(paciente['nivel_consciencia']) else 'Alerta'
+                    genero_valor = paciente['genero'] if 'genero' in paciente and pd.notna(paciente['genero']) else 'Feminino'
                     
                     patient_data = {
                         'freq_cardiaca': int(paciente['FC']),
