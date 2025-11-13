@@ -98,13 +98,11 @@ class PCACRPredictor:
             'confidence': confidence
         }
     
-    def get_feature_importance(self, patient_data):
+    def get_feature_importance(self):
         """
-        Retorna importância das features para a predição deste paciente
-        
-        Args:
-            patient_data (dict): Dados do paciente
-            
+        Retorna a importância GLOBAL das features para o modelo.
+        Nota: Isso não é específico para um paciente, mas geral para o modelo treinado.
+
         Returns:
             dict: Features e suas importâncias
         """

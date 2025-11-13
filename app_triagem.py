@@ -1,14 +1,14 @@
-﻿import os
+﻿﻿import os
 import html
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import sqlite3
 from datetime import datetime
 import numpy as np
 import time
 from auth import AuthSystem
+from databricks import sql
 
 # Importar módulo de ML
 try:
@@ -35,72 +35,78 @@ st.set_page_config(
 # Inicialização do sistema de autenticação
 auth_system = AuthSystem()
 
-# Importar e executar a criação de dados de exemplo
-from init_data import criar_dados_exemplo
-
-# Conexão com banco de dados - usar o mesmo banco do init_data
-conn = sqlite3.connect('avicena_auth.db', check_same_thread=False)
-
-# Criar tabela triagem se não existir (compatibilidade com código antigo)
-cursor = conn.cursor()
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS triagem (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        Nome TEXT,
-        Idade INTEGER,
-        PA TEXT,
-        FC INTEGER,
-        FR INTEGER,
-        Temp REAL,
-        Comorbidade TEXT,
-        Alergia TEXT,
-        Queixa_Principal TEXT,
-        urgencia_automatica TEXT,
-        urgencia_manual TEXT,
-        status TEXT DEFAULT 'AGUARDANDO',
-        data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+@st.cache_resource
+def init_databricks_connection():
+    """Initializes a connection to the Databricks SQL Warehouse."""
+    return sql.connect(
+        server_hostname=st.secrets["databricks"]["server_hostname"],
+        http_path=st.secrets["databricks"]["http_path"],
+        access_token=st.secrets["databricks"]["access_token"],
     )
-''')
-conn.commit()
 
-# Criar alguns dados de exemplo na tabela triagem se estiver vazia
-cursor.execute('SELECT COUNT(*) FROM triagem')
-if cursor.fetchone()[0] == 0:
-    pacientes_exemplo = [
-        ('João Silva', 45, '120/80', 75, 16, 36.5, 'Hipertensão', 'Nenhuma', 'Dor no peito', 'ALTA PRIORIDADE', 'ALTA PRIORIDADE', 'AGUARDANDO'),
-        ('Maria Santos', 67, '140/90', 88, 20, 37.2, 'Diabetes', 'Penicilina', 'Febre e tosse', 'MÉDIA PRIORIDADE', 'MÉDIA PRIORIDADE', 'AGUARDANDO'),
-        ('Carlos Oliveira', 29, '110/70', 68, 14, 36.0, 'Nenhuma', 'Nenhuma', 'Dor abdominal', 'BAIXA PRIORIDADE', 'BAIXA PRIORIDADE', 'AGUARDANDO'),
-        ('Ana Paula', 54, '160/100', 95, 22, 37.8, 'Hipertensão', 'Nenhuma', 'Tontura intensa', 'ALTA PRIORIDADE', 'ALTA PRIORIDADE', 'AGUARDANDO'),
-        ('Pedro Costa', 38, '115/75', 72, 15, 36.3, 'Nenhuma', 'Nenhuma', 'Dor de cabeça', 'MÍNIMA (ELETIVA)', 'MÍNIMA (ELETIVA)', 'AGUARDANDO'),
-    ]
-    
-    for p in pacientes_exemplo:
-        cursor.execute('''
-            INSERT INTO triagem (Nome, Idade, PA, FC, FR, Temp, Comorbidade, Alergia, 
-                               Queixa_Principal, urgencia_automatica, urgencia_manual, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', p)
-    conn.commit()
+conn = init_databricks_connection()
 
-criar_dados_exemplo()
+def setup_database(cursor):
+    """Creates the schema and table in Databricks if they don't exist."""
+    cursor.execute("CREATE SCHEMA IF NOT EXISTS avicena_care")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS avicena_care.triagem (
+            id STRING,
+            Nome STRING,
+            Idade INT,
+            PA STRING,
+            FC INT,
+            FR INT,
+            Temp DOUBLE,
+            SpO2 INT,
+            nivel_consciencia STRING,
+            genero STRING,
+            intensidade_dor INT,
+            Comorbidade STRING,
+            Alergia STRING,
+            Queixa_Principal STRING,
+            urgencia_automatica STRING,
+            urgencia_manual STRING,
+            status STRING,
+            data_cadastro TIMESTAMP,
+            data_atendimento TIMESTAMP
+        )
+    """)
+
+def load_initial_data(cursor):
+    """Loads initial sample data if the table is empty."""
+    setup_database(cursor)
+    cursor.execute("SELECT COUNT(*) FROM avicena_care.triagem")
+    if cursor.fetchone()[0] == 0:
+        pacientes_exemplo = [
+            ('João Silva', 45, '120/80', 75, 16, 36.5, 'Hipertensão', 'Nenhuma', 'Dor no peito', 'ALTA PRIORIDADE', 'ALTA PRIORIDADE', 'AGUARDANDO'),
+            ('Maria Santos', 67, '140/90', 88, 20, 37.2, 'Diabetes', 'Penicilina', 'Febre e tosse', 'MÉDIA PRIORIDADE', 'MÉDIA PRIORIDADE', 'AGUARDANDO'),
+        ]
+        for p in pacientes_exemplo:
+            cursor.execute("""
+                INSERT INTO avicena_care.triagem (id, Nome, Idade, PA, FC, FR, Temp, Comorbidade, Alergia, Queixa_Principal, urgencia_automatica, urgencia_manual, status, data_cadastro)
+                VALUES (uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            """, (p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11]))
+
+with conn.cursor() as cursor:
+    load_initial_data(cursor)
 
 def get_data(incluir_atendidos: bool = False):
     """Busca dados de pacientes do banco"""
     if incluir_atendidos:
-        return pd.read_sql_query(
-            "SELECT * FROM triagem ORDER BY data_cadastro DESC", conn
-        )
-    return pd.read_sql_query(
-        "SELECT * FROM triagem WHERE status='AGUARDANDO' ORDER BY data_cadastro DESC",
-        conn,
-    )
+        query = "SELECT * FROM avicena_care.triagem ORDER BY data_cadastro DESC"
+    else:
+        query = "SELECT * FROM avicena_care.triagem WHERE status='AGUARDANDO' ORDER BY data_cadastro DESC"
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+        return cursor.fetchall_pandas()
 
 def get_atendidos():
     """Busca pacientes já atendidos"""
-    return pd.read_sql_query(
-        "SELECT * FROM triagem WHERE status='ATENDIDO' ORDER BY data_atendimento DESC",
-        conn,
-    )
+    query = "SELECT * FROM avicena_care.triagem WHERE status='ATENDIDO' ORDER BY data_atendimento DESC"
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+        return cursor.fetchall_pandas()
 
 def calcular_urgencia(
     temperatura,
@@ -353,10 +359,10 @@ def mostrar_fila_pacientes(df):
                     if st.button("✓", key=f"btn_urgencia_{paciente['id']}", help="Atualizar urgência", type="secondary"):
                         cursor = conn.cursor()
                         cursor.execute(
-                            "UPDATE triagem SET urgencia_manual = ? WHERE id = ?",
-                            (nova_urgencia, paciente['id'])
+                            "UPDATE avicena_care.triagem SET urgencia_manual = %s WHERE id = %s",
+                            (nova_urgencia, str(paciente['id']))
                         )
-                        conn.commit()
+                        
                         st.success("✓ Atualizado")
                         time.sleep(0.3)
                         st.rerun()
@@ -366,10 +372,9 @@ def mostrar_fila_pacientes(df):
                 if st.button("🏥 Marcar como Atendido", key=f"btn_atendido_{paciente['id']}", type="primary", use_container_width=True):
                     cursor = conn.cursor()
                     cursor.execute(
-                        "UPDATE triagem SET status = 'ATENDIDO', data_atendimento = CURRENT_TIMESTAMP WHERE id = ?",
-                        (paciente['id'],)
+                        "UPDATE avicena_care.triagem SET status = 'ATENDIDO', data_atendimento = now() WHERE id = %s",
+                        (str(paciente['id']),)
                     )
-                    conn.commit()
                     st.success(f"✅ {paciente['Nome']} marcado como atendido!")
                     time.sleep(0.5)
                     st.rerun()
@@ -517,13 +522,13 @@ def mostrar_form_novo_paciente():
                 # Salvar no banco de dados
                 try:
                     cursor = conn.cursor()
-                    cursor.execute('''
-                        INSERT INTO triagem (
-                            Nome, Idade, PA, FC, FR, Temp, Comorbidade, Alergia,
+                    cursor.execute("""
+                        INSERT INTO avicena_care.triagem (
+                            id, Nome, Idade, PA, FC, FR, Temp, Comorbidade, Alergia,
                             Queixa_Principal, urgencia_automatica, urgencia_manual, status,
-                            SpO2, nivel_consciencia, genero, intensidade_dor
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
+                            SpO2, nivel_consciencia, genero, intensidade_dor, data_cadastro
+                        ) VALUES (uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                    """, (
                         nome,
                         int(idade),
                         f"{int(pa_sistolica)}/{int(pa_diastolica)}",
@@ -541,8 +546,8 @@ def mostrar_form_novo_paciente():
                         genero,
                         int(intensidade_dor)
                     ))
-                    conn.commit()
                     
+
                     st.success(f"✅ Paciente {nome} cadastrado com sucesso!")
                     
                     # === CALCULAR SCORES CLÍNICOS PRIMEIRO (necessário para validação) ===
@@ -2615,72 +2620,7 @@ def mostrar_interface_enfermeiro_completa():
     st.markdown(brand_header, unsafe_allow_html=True)
     
     # Dashboard com contadores de prioridade
-    total_pacientes = len(df)
-    urgencia_maxima = len(df[df["urgencia_manual"] == "PRIORIDADE MÁXIMA"]) if "urgencia_manual" in df.columns else 0
-    urgencia_alta = len(df[df["urgencia_manual"] == "ALTA PRIORIDADE"]) if "urgencia_manual" in df.columns else 0
-    urgencia_media = len(df[df["urgencia_manual"] == "MÉDIA PRIORIDADE"]) if "urgencia_manual" in df.columns else 0
-    urgencia_baixa = len(df[df["urgencia_manual"] == "BAIXA PRIORIDADE"]) if "urgencia_manual" in df.columns else 0
-    urgencia_minima = len(df[df["urgencia_manual"] == "MÍNIMA (ELETIVA)"]) if "urgencia_manual" in df.columns else 0
-    
-    protocol_html = f"""
-    <div class='pcacr-wrapper'>
-      <div class='pcacr-box-minimal'>
-         <div class='pcacr-header-row'>
-            <div class='pcacr-title-section'>
-               <h2>📋 Protocolo PCACR Ativo</h2>
-               <p>Classificação de risco por cores e tempos alvo</p>
-            </div>
-            <div class='pcacr-legend-inline'>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-max'></span>Máxima (0min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-alta'></span>Alta (15min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-media'></span>Média (60min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-baixa'></span>Baixa (120min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-min'></span>Mínima (240min)</div>
-            </div>
-         </div>
-         <div class='kpi-band-minimal'>
-            <div class='kpi-box-minimal total'>
-                <div class='kpi-icon-minimal'>📊</div>
-                <div class='kpi-value-minimal'>{total_pacientes}</div>
-                <div class='kpi-label-minimal'>TOTAL DE PACIENTES</div>
-                <div class='kpi-meta-minimal'>Atual</div>
-            </div>
-            <div class='kpi-box-minimal max'>
-                <div class='kpi-circle-modern d-max'></div>
-                <div class='kpi-value-minimal'>{urgencia_maxima}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE MÁXIMA</div>
-                <div class='kpi-meta-minimal'>0 minutos</div>
-            </div>
-            <div class='kpi-box-minimal alta'>
-                <div class='kpi-circle-modern d-alta'></div>
-                <div class='kpi-value-minimal'>{urgencia_alta}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE ALTA</div>
-                <div class='kpi-meta-minimal'>15 minutos</div>
-            </div>
-            <div class='kpi-box-minimal media'>
-                <div class='kpi-circle-modern d-media'></div>
-                <div class='kpi-value-minimal'>{urgencia_media}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE MÉDIA</div>
-                <div class='kpi-meta-minimal'>60 minutos</div>
-            </div>
-            <div class='kpi-box-minimal baixa'>
-                <div class='kpi-circle-modern d-baixa'></div>
-                <div class='kpi-value-minimal'>{urgencia_baixa}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE BAIXA</div>
-                <div class='kpi-meta-minimal'>120 minutos</div>
-            </div>
-            <div class='kpi-box-minimal min'>
-                <div class='kpi-circle-modern d-min'></div>
-                <div class='kpi-value-minimal'>{urgencia_minima}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE MÍNIMA</div>
-                <div class='kpi-meta-minimal'>240 minutos</div>
-            </div>
-         </div>
-      </div>
-    </div>
-    """
-    
-    st.markdown(protocol_html, unsafe_allow_html=True)
+    mostrar_dashboard_kpis(df)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     
     # Tabs: Lista de Pacientes, Novo Paciente e Histórico
@@ -2694,91 +2634,6 @@ def mostrar_interface_enfermeiro_completa():
     
     with tab_historico:
         mostrar_historico_atendimentos()
-
-def mostrar_historico_atendimentos():
-    """Mostra histórico de pacientes atendidos"""
-    st.markdown("### 📋 Histórico de Atendimentos")
-    
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, Nome, Idade, PA, FC, FR, Temp, Queixa_Principal, 
-               urgencia_manual, data_cadastro, data_atendimento
-        FROM triagem 
-        WHERE status = 'ATENDIDO'
-        ORDER BY data_atendimento DESC
-    """)
-    
-    atendidos = cursor.fetchall()
-    
-    if not atendidos:
-        st.info("📋 Nenhum atendimento registrado ainda.")
-        return
-    
-    st.markdown(f"**Total de atendimentos:** {len(atendidos)}")
-    
-    # CSS para campos com fundo branco
-    st.markdown("""
-    <style>
-    /* Fundo branco para input de busca */
-    div[data-testid="stTextInput"] input {
-        background-color: #ffffff !important;
-        color: #1e293b !important;
-        border: 1px solid #cbd5e1 !important;
-    }
-    
-    /* Fundo branco para selectbox */
-    div[data-baseweb="select"] > div {
-        background-color: #ffffff !important;
-        color: #1e293b !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Filtros
-    col_filtro1, col_filtro2 = st.columns(2)
-    with col_filtro1:
-        filtro_nome = st.text_input("🔍 Buscar por nome:", key="filtro_historico_nome")
-    with col_filtro2:
-        filtro_periodo = st.selectbox("📅 Período:", ["Todos", "Hoje", "Última semana", "Último mês"], key="filtro_periodo")
-    
-    for paciente in atendidos:
-        # Aplicar filtro de nome
-        if filtro_nome and filtro_nome.lower() not in paciente[1].lower():
-            continue
-        
-        # Extrair dados
-        id_pac, nome, idade, pa, fc, fr, temp, queixa, urgencia, data_cad, data_atend = paciente
-        
-        emoji_map = {
-            'PRIORIDADE MÁXIMA': '🔴',
-            'ALTA PRIORIDADE': '🟠',
-            'MÉDIA PRIORIDADE': '🟡',
-            'BAIXA PRIORIDADE': '🟢',
-            'MÍNIMA (ELETIVA)': '🔵'
-        }
-        emoji = emoji_map.get(urgencia, '⚪')
-        
-        with st.expander(f"✅ {nome} ({idade} anos) - {urgencia} - {data_atend[:10] if data_atend else 'N/A'}"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.write(f"**Queixa:** {queixa}")
-                st.write(f"**Classificação:** {emoji} {urgencia}")
-            with col2:
-                st.write(f"**Sinais Vitais:**")
-                st.write(f"PA: {pa} | FC: {fc} bpm")
-                st.write(f"FR: {fr} irpm | Temp: {temp}°C")
-            with col3:
-                st.write(f"**Cadastro:** {data_cad[:16] if data_cad else 'N/A'}")
-                st.write(f"**Atendimento:** {data_atend[:16] if data_atend else 'N/A'}")
-                
-                # Botão para retornar à fila
-                if st.button("↩️ Retornar à Fila", key=f"retornar_{id_pac}"):
-                    cursor.execute("UPDATE triagem SET status = 'AGUARDANDO', data_atendimento = NULL WHERE id = ?", (id_pac,))
-                    conn.commit()
-                    st.success(f"✅ {nome} retornou à fila!")
-                    time.sleep(0.5)
-                    st.rerun()
-
 
 def mostrar_interface_medico_completa():
     """Interface completa para médicos: Dashboard, Lista, Análise Clínica, Relatórios e Novo Paciente"""
@@ -2840,72 +2695,7 @@ def mostrar_interface_medico_completa():
     st.markdown(brand_header, unsafe_allow_html=True)
     
     # Dashboard (mesmo da enfermagem)
-    total_pacientes = len(df)
-    urgencia_maxima = len(df[df["urgencia_manual"] == "PRIORIDADE MÁXIMA"]) if "urgencia_manual" in df.columns else 0
-    urgencia_alta = len(df[df["urgencia_manual"] == "ALTA PRIORIDADE"]) if "urgencia_manual" in df.columns else 0
-    urgencia_media = len(df[df["urgencia_manual"] == "MÉDIA PRIORIDADE"]) if "urgencia_manual" in df.columns else 0
-    urgencia_baixa = len(df[df["urgencia_manual"] == "BAIXA PRIORIDADE"]) if "urgencia_manual" in df.columns else 0
-    urgencia_minima = len(df[df["urgencia_manual"] == "MÍNIMA (ELETIVA)"]) if "urgencia_manual" in df.columns else 0
-    
-    protocol_html = f"""
-    <div class='pcacr-wrapper'>
-      <div class='pcacr-box-minimal'>
-         <div class='pcacr-header-row'>
-            <div class='pcacr-title-section'>
-               <h2>📋 Protocolo PCACR Ativo</h2>
-               <p>Classificação de risco por cores e tempos alvo</p>
-            </div>
-            <div class='pcacr-legend-inline'>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-max'></span>Máxima (0min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-alta'></span>Alta (15min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-media'></span>Média (60min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-baixa'></span>Baixa (120min)</div>
-               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-min'></span>Mínima (240min)</div>
-            </div>
-         </div>
-         <div class='kpi-band-minimal'>
-            <div class='kpi-box-minimal total'>
-                <div class='kpi-icon-minimal'>📊</div>
-                <div class='kpi-value-minimal'>{total_pacientes}</div>
-                <div class='kpi-label-minimal'>TOTAL DE PACIENTES</div>
-                <div class='kpi-meta-minimal'>Atual</div>
-            </div>
-            <div class='kpi-box-minimal max'>
-                <div class='kpi-circle-modern d-max'></div>
-                <div class='kpi-value-minimal'>{urgencia_maxima}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE MÁXIMA</div>
-                <div class='kpi-meta-minimal'>0 minutos</div>
-            </div>
-            <div class='kpi-box-minimal alta'>
-                <div class='kpi-circle-modern d-alta'></div>
-                <div class='kpi-value-minimal'>{urgencia_alta}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE ALTA</div>
-                <div class='kpi-meta-minimal'>15 minutos</div>
-            </div>
-            <div class='kpi-box-minimal media'>
-                <div class='kpi-circle-modern d-media'></div>
-                <div class='kpi-value-minimal'>{urgencia_media}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE MÉDIA</div>
-                <div class='kpi-meta-minimal'>60 minutos</div>
-            </div>
-            <div class='kpi-box-minimal baixa'>
-                <div class='kpi-circle-modern d-baixa'></div>
-                <div class='kpi-value-minimal'>{urgencia_baixa}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE BAIXA</div>
-                <div class='kpi-meta-minimal'>120 minutos</div>
-            </div>
-            <div class='kpi-box-minimal min'>
-                <div class='kpi-circle-modern d-min'></div>
-                <div class='kpi-value-minimal'>{urgencia_minima}</div>
-                <div class='kpi-label-minimal'>PRIORIDADE MÍNIMA</div>
-                <div class='kpi-meta-minimal'>240 minutos</div>
-            </div>
-         </div>
-      </div>
-    </div>
-    """
-    
-    st.markdown(protocol_html, unsafe_allow_html=True)
+    mostrar_dashboard_kpis(df)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     
     # Tabs: Lista, Análise Clínica, Análise Preditiva e Relatórios (médico não tem acesso a Novo Paciente)
@@ -2947,7 +2737,7 @@ def mostrar_interface_medico_completa():
                     # Extrair sinais vitais
                     pa_parts = paciente['PA'].split('/')
                     pa_sistolica = int(pa_parts[0]) if len(pa_parts) > 0 else 120
-                    pa_diastolica = int(pa_parts[1]) if len(pa_parts) > 1 else 80
+                    pa_diastolica = int(pa_parts[1]) if len(pa_parts) > 1 else 80 # type: ignore
                     
                     # Carregar dados adicionais (com valores padrão para registros antigos)
                     spo2_valor = int(paciente['SpO2']) if 'SpO2' in paciente and paciente['SpO2'] else 95
@@ -2963,7 +2753,7 @@ def mostrar_interface_medico_completa():
                         'freq_respiratoria': int(paciente['FR']),
                         'idade': int(paciente['Idade']),
                         'genero': genero_valor
-                    }
+                    } # type: ignore
                     
                     try:
                         # Fazer predição
@@ -3120,7 +2910,7 @@ def mostrar_interface_medico_completa():
                         
                         # Feature Importance
                         st.markdown("### 📈 Importância dos Fatores Clínicos")
-                        feature_importance = predictor.get_feature_importance(patient_data)
+                        feature_importance = predictor.get_feature_importance()
                         
                         # Ordenar por importância
                         sorted_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -3178,6 +2968,130 @@ def mostrar_interface_medico_completa():
                         
                     except Exception as e:
                         st.error(f"❌ Erro na análise preditiva: {str(e)}")
+
+def mostrar_dashboard_kpis(df):
+    """Exibe o dashboard de KPIs de prioridade."""
+    total_pacientes = len(df)
+    urgencia_maxima = len(df[df["urgencia_manual"] == "PRIORIDADE MÁXIMA"])
+    urgencia_alta = len(df[df["urgencia_manual"] == "ALTA PRIORIDADE"])
+    urgencia_media = len(df[df["urgencia_manual"] == "MÉDIA PRIORIDADE"])
+    urgencia_baixa = len(df[df["urgencia_manual"] == "BAIXA PRIORIDADE"])
+    urgencia_minima = len(df[df["urgencia_manual"] == "MÍNIMA (ELETIVA)"])
+
+    protocol_html = f"""
+    <div class='pcacr-wrapper'>
+      <div class='pcacr-box-minimal'>
+         <div class='pcacr-header-row'>
+            <div class='pcacr-title-section'>
+               <h2>📋 Protocolo PCACR Ativo</h2>
+               <p>Classificação de risco por cores e tempos alvo</p>
+            </div>
+            <div class='pcacr-legend-inline'>
+               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-max'></span>Máxima (0min)</div>
+               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-alta'></span>Alta (15min)</div>
+               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-media'></span>Média (60min)</div>
+               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-baixa'></span>Baixa (120min)</div>
+               <div class='pcacr-pillx'><span class='pcacr-dot-modern d-min'></span>Mínima (240min)</div>
+            </div>
+         </div>
+         <div class='kpi-band-minimal'>
+            <div class='kpi-box-minimal total'>
+                <div class='kpi-icon-minimal'>📊</div>
+                <div class='kpi-value-minimal'>{total_pacientes}</div>
+                <div class='kpi-label-minimal'>TOTAL DE PACIENTES</div>
+                <div class='kpi-meta-minimal'>Atual</div>
+            </div>
+            <div class='kpi-box-minimal max'>
+                <div class='kpi-circle-modern d-max'></div>
+                <div class='kpi-value-minimal'>{urgencia_maxima}</div>
+                <div class='kpi-label-minimal'>PRIORIDADE MÁXIMA</div>
+                <div class='kpi-meta-minimal'>0 minutos</div>
+            </div>
+            <div class='kpi-box-minimal alta'>
+                <div class='kpi-circle-modern d-alta'></div>
+                <div class='kpi-value-minimal'>{urgencia_alta}</div>
+                <div class='kpi-label-minimal'>PRIORIDADE ALTA</div>
+                <div class='kpi-meta-minimal'>15 minutos</div>
+            </div>
+            <div class='kpi-box-minimal media'>
+                <div class='kpi-circle-modern d-media'></div>
+                <div class='kpi-value-minimal'>{urgencia_media}</div>
+                <div class='kpi-label-minimal'>PRIORIDADE MÉDIA</div>
+                <div class='kpi-meta-minimal'>60 minutos</div>
+            </div>
+            <div class='kpi-box-minimal baixa'>
+                <div class='kpi-circle-modern d-baixa'></div>
+                <div class='kpi-value-minimal'>{urgencia_baixa}</div>
+                <div class='kpi-label-minimal'>PRIORIDADE BAIXA</div>
+                <div class='kpi-meta-minimal'>120 minutos</div>
+            </div>
+            <div class='kpi-box-minimal min'>
+                <div class='kpi-circle-modern d-min'></div>
+                <div class='kpi-value-minimal'>{urgencia_minima}</div>
+                <div class='kpi-label-minimal'>PRIORIDADE MÍNIMA</div>
+                <div class='kpi-meta-minimal'>240 minutos</div>
+            </div>
+         </div>
+      </div>
+    </div>
+    """
+    st.markdown(protocol_html, unsafe_allow_html=True)
+
+def mostrar_historico_atendimentos():
+    """Mostra histórico de pacientes atendidos com opção de busca."""
+    st.markdown("### 📋 Histórico de Atendimentos")
+    
+    df_atendidos = get_atendidos()
+    
+    if df_atendidos.empty:
+        st.info("📋 Nenhum atendimento registrado ainda.")
+        return
+    
+    st.markdown(f"**Total de atendimentos:** {len(df_atendidos)}")
+    
+    # Filtros
+    col_filtro1, col_filtro2 = st.columns(2)
+    with col_filtro1:
+        filtro_nome = st.text_input("🔍 Buscar por nome:", key="filtro_historico_nome")
+    with col_filtro2:
+        filtro_periodo = st.selectbox("📅 Período:", ["Todos", "Hoje", "Última semana", "Último mês"], key="filtro_periodo")
+
+    # Aplicar filtros
+    if filtro_nome:
+        df_atendidos = df_atendidos[df_atendidos['Nome'].str.contains(filtro_nome, case=False, na=False)]
+
+    # TODO: Implementar filtro de período
+
+    for _, paciente in df_atendidos.iterrows():
+        urgencia = paciente['urgencia_manual']
+        emoji_map = {
+            'PRIORIDADE MÁXIMA': '🔴', 'ALTA PRIORIDADE': '🟠', 'MÉDIA PRIORIDADE': '🟡',
+            'BAIXA PRIORIDADE': '🟢', 'MÍNIMA (ELETIVA)': '🔵'
+        }
+        emoji = emoji_map.get(urgencia, '⚪')
+        
+        data_atend_str = pd.to_datetime(paciente['data_atendimento']).strftime('%d/%m/%Y %H:%M') if pd.notna(paciente['data_atendimento']) else 'N/A'
+        data_cad_str = pd.to_datetime(paciente['data_cadastro']).strftime('%d/%m/%Y %H:%M') if pd.notna(paciente['data_cadastro']) else 'N/A'
+
+        with st.expander(f"✅ {paciente['Nome']} ({paciente['Idade']} anos) - {urgencia} - {data_atend_str.split(' ')[0]}"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**Queixa:** {paciente['Queixa_Principal']}")
+                st.write(f"**Classificação:** {emoji} {urgencia}")
+            with col2:
+                st.write(f"**Sinais Vitais:**")
+                st.write(f"PA: {paciente['PA']} | FC: {paciente['FC']} bpm")
+                st.write(f"FR: {paciente['FR']} irpm | Temp: {paciente['Temp']}°C")
+            with col3:
+                st.write(f"**Cadastro:** {data_cad_str}")
+                st.write(f"**Atendimento:** {data_atend_str}")
+                
+                if st.button("↩️ Retornar à Fila", key=f"retornar_{paciente['id']}"):
+                    with conn.cursor() as cursor:
+                        cursor.execute("UPDATE avicena_care.triagem SET status = 'AGUARDANDO', data_atendimento = NULL WHERE id = %s", (str(paciente['id']),))
+                    st.success(f"✅ {paciente['Nome']} retornou à fila!")
+                    time.sleep(0.5)
+                    st.rerun()
     
     with tab_relatorios:
         mostrar_relatorios(df)

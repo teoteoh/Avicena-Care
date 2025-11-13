@@ -108,7 +108,7 @@ def prepare_features(df):
     feature_cols = [
         'HR',      # Frequência Cardíaca
         'O2Sat',   # SpO2 (%)
-        'Temp',    # Temperatura
+        'Temp',    # Temperatura (°C)
         'SBP',     # PA Sistólica
         'DBP',     # PA Diastólica
         'MAP',     # PAM (calculado)
@@ -119,10 +119,6 @@ def prepare_features(df):
     
     # Criar dataframe de features
     X = df[feature_cols].copy()
-    
-    # Preencher valores faltantes com a mediana
-    for col in X.columns:
-        X[col] = X[col].fillna(X[col].median())
     
     return X, feature_cols
 
@@ -163,13 +159,13 @@ def train_pcacr_model():
     # Treinar Random Forest (parâmetros otimizados para velocidade)
     print("\n🌲 Treinando Random Forest...")
     model = RandomForestClassifier(
-        n_estimators=100,  # Reduzido de 200
-        max_depth=10,      # Reduzido de 15
-        min_samples_split=20,  # Aumentado
-        min_samples_leaf=10,   # Aumentado
+        n_estimators=100,      # Número de árvores na floresta.
+        max_depth=10,          # Profundidade máxima de cada árvore. Limita a complexidade.
+        min_samples_split=20,  # Mínimo de amostras para dividir um nó. Evita overfitting.
+        min_samples_leaf=10,   # Mínimo de amostras em um nó folha. Suaviza o modelo.
         random_state=42,
-        n_jobs=2,  # Limitar número de threads
-        class_weight='balanced',
+        n_jobs=-1,             # Usar todos os processadores disponíveis.
+        class_weight='balanced', # Ajusta os pesos das classes para lidar com desbalanceamento.
         verbose=1  # Mostrar progresso
     )
     

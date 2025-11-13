@@ -104,7 +104,7 @@ Inclui tudo da Enfermagem, mais:
 - **Streamlit 1.28+** - Framework web
 - **Scikit-learn** - Machine Learning
 - **Pandas** - Manipulação de dados
-- **SQLite** - Banco de dados
+- **Databricks** - Plataforma de dados e banco de dados
 
 ### Frontend
 - **Plotly** - Gráficos interativos
@@ -125,17 +125,29 @@ Inclui tudo da Enfermagem, mais:
 - Python 3.8 ou superior
 - pip (gerenciador de pacotes)
 
-### Instalação Rápida
+### 1. Configuração do Databricks
+
+- Crie um **SQL Warehouse** no seu workspace Databricks.
+- Gere um **Personal Access Token (PAT)** em *User Settings > Developer*.
+
+### 2. Instalação Local
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/seu-usuario/avicena-care.git
+git clone https://github.com/magosheimus/Avicena-Care.git
 cd avicena-care
 
-# 2. Instale as dependências
+# 2. Crie o arquivo de segredos
+# Crie o arquivo .streamlit/secrets.toml e adicione suas credenciais:
+[databricks]
+server_hostname = "adb-xxxxxxxx.azuredatabricks.net"
+http_path = "/sql/1.0/warehouses/xxxxxxxx"
+access_token = "dapixxxxxxxx"
+
+# 3. Instale as dependências
 pip install -r requirements.txt
 
-# 3. Execute o sistema
+# 4. Execute o sistema
 streamlit run app_triagem.py
 ```
 
