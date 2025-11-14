@@ -159,10 +159,9 @@ iniciar_app.bat
 
 ### Primeira Execução
 O sistema irá automaticamente:
-1. Criar o banco de dados SQLite
-2. Carregar o modelo de ML treinado
-3. Inicializar os módulos de scores clínicos
-4. Abrir o navegador em `http://localhost:8501`
+1. Conectar-se ao Databricks e criar a tabela `avicena_care.triagem` se ela não existir.
+2. Carregar o modelo de ML treinado.
+3. Inicializar os módulos de scores clínicos e abrir o navegador em `http://localhost:8501`.
 
 ---
 

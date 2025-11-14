@@ -10,6 +10,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 import joblib
 import os
+from databricks import sql
 
 # Mapeamento de sepse para classificação PCACR
 # SepsisLabel: 0 (sem sepse) -> prioridades mais baixas
@@ -127,12 +128,22 @@ def train_pcacr_model():
     print("🏥 Iniciando treinamento do modelo PCACR...")
     
     # Carregar dataset
-    print("📊 Carregando Dataset.csv...")
-    # Usar apenas uma amostra do dataset para treino mais rápido
-    df = pd.read_csv('data/Dataset.csv', nrows=50000)  # Usar apenas 50k linhas
+    print("📊 Carregando dados de treinamento do Databricks...")
+    
+    # Inicializar conexão com Databricks SQL Warehouse
+    with sql.connect(
+        server_hostname=st.secrets["databricks"]["server_hostname"],
+        http_path=st.secrets["databricks"]["http_path"],
+        access_token=st.secrets["databricks"]["access_token"],
+    ) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM avicena_care.triagem")
+            df = cursor.fetchall_pandas()
+    
     print(f"   Dataset carregado: {len(df)} registros")
     
     # Criar classificação PCACR baseada nos dados clínicos
+
     print("🎯 Criando classificações PCACR...")
     df['PCACR_Class'] = df.apply(map_to_pcacr, axis=1)
     
@@ -142,6 +153,7 @@ def train_pcacr_model():
     
     # Preparar features
     print("\n🔧 Preparando features...")
+
     X, feature_cols = prepare_features(df)
     y = df['PCACR_Class']
     
