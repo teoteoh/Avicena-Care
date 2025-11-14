@@ -183,6 +183,7 @@ Avicena-Care/
 │   └── Dataset.csv            # Dataset de treino (153MB)
 ├── models/
 │   ├── pcacr_model.pkl        # Modelo treinado
+│   └── pcacr_scaler.pkl       # Normalizador
 └── README.md                  # Esta documentação
 ```
 
