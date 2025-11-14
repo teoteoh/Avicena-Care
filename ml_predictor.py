@@ -59,13 +59,16 @@ class PCACRPredictor:
         genero_str = patient_data.get('genero', 'Masculino')
         genero_bin = 1 if genero_str == 'Masculino' else 0
         
+        sbp = patient_data.get('pa_sistolica', 120)
+        dbp = patient_data.get('pa_diastolica', 80)
+        
         patient_features = {
             'HR': patient_data.get('freq_cardiaca', 75),
             'O2Sat': patient_data.get('spo2', 98),
             'Temp': patient_data.get('temperatura', 36.5),
-            'SBP': patient_data.get('pa_sistolica', 120),
-            'DBP': patient_data.get('pa_diastolica', 80),
-            'MAP': patient_data.get('pa_media', (patient_data.get('pa_sistolica', 120) + 2*patient_data.get('pa_diastolica', 80))/3),
+            'SBP': sbp,
+            'DBP': dbp,
+            'MAP': (sbp + 2 * dbp) / 3,
             'Resp': patient_data.get('freq_respiratoria', 16),
             'Age': patient_data.get('idade', 50),
             'Gender': genero_bin

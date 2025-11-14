@@ -1,4 +1,4 @@
-﻿﻿import os
+﻿import os
 import html
 import streamlit as st
 import pandas as pd
@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import numpy as np
+import uuid
 import time
 from auth import AuthSystem
 from databricks import sql
@@ -44,13 +45,13 @@ def init_databricks_connection():
         access_token=st.secrets["databricks"]["access_token"],
     )
 
-conn = init_databricks_connection()
-
 def setup_database(cursor):
-    """Creates the schema and table in Databricks if they don't exist."""
-    cursor.execute("CREATE SCHEMA IF NOT EXISTS avicena_care")
+    """Creates the schema and table in Databricks and ensures all columns exist."""
+    # TODO: Update with your schema name if different from 'avicena_care'
+    cursor.execute("CREATE SCHEMA IF NOT EXISTS avicena_care") 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS avicena_care.triagem (
+        -- TODO: Update with your table name if different from 'triagem'
+        CREATE TABLE IF NOT EXISTS avicena_care.triagem ( 
             id STRING,
             Nome STRING,
             Idade INT,
@@ -69,44 +70,82 @@ def setup_database(cursor):
             urgencia_manual STRING,
             status STRING,
             data_cadastro TIMESTAMP,
-            data_atendimento TIMESTAMP
+            data_atendimento TIMESTAMP,
+            medicacoes STRING
         )
     """)
+    
+    # Garantir que a coluna 'medicacoes' exista (para compatibilidade com versões antigas)
+    try:
+        cursor.execute("ALTER TABLE avicena_care.triagem ADD COLUMN medicacoes STRING")
+        print("✅ Coluna 'medicacoes' adicionada à tabela 'triagem'.")
+    except Exception as e:
+        # Se a coluna já existir, o Databricks lançará um erro. Podemos ignorá-lo.
+        if "COLUMN_ALREADY_EXISTS" in str(e):
+            pass # A coluna já existe, o que é o esperado.
 
 def load_initial_data(cursor):
     """Loads initial sample data if the table is empty."""
-    setup_database(cursor)
+    # TODO: Update with your table name if you want to load initial data
+    # setup_database(cursor) # This can be commented out if your table already exists
     cursor.execute("SELECT COUNT(*) FROM avicena_care.triagem")
     if cursor.fetchone()[0] == 0:
+        # Schema: Nome, Idade, PA, FC, FR, Temp, SpO2, nivel_consciencia, genero, intensidade_dor, Comorbidade, Alergia, Queixa_Principal, urgencia_automatica, urgencia_manual, status
+        # Added 'medicacoes' as the 12th item in the tuple
         pacientes_exemplo = [
-            ('João Silva', 45, '120/80', 75, 16, 36.5, 'Hipertensão', 'Nenhuma', 'Dor no peito', 'ALTA PRIORIDADE', 'ALTA PRIORIDADE', 'AGUARDANDO'),
-            ('Maria Santos', 67, '140/90', 88, 20, 37.2, 'Diabetes', 'Penicilina', 'Febre e tosse', 'MÉDIA PRIORIDADE', 'MÉDIA PRIORIDADE', 'AGUARDANDO'),
+            ('João Silva', 45, '120/80', 75, 16, 36.5, 98, 'Alerta', 'Masculino', 7, 'Hipertensão', 'Nenhuma', 'Nenhuma', 'Dor no peito opressiva', 'ALTA PRIORIDADE', 'ALTA PRIORIDADE', 'AGUARDANDO'),
+            ('Maria Santos', 67, '140/90', 88, 20, 37.2, 95, 'Alerta', 'Feminino', 4, 'Diabetes', 'Penicilina', 'Metformina', 'Febre e tosse persistente', 'MÉDIA PRIORIDADE', 'MÉDIA PRIORIDADE', 'AGUARDANDO'),
+            ('Carlos Andrade', 22, '110/70', 60, 14, 36.1, 99, 'Alerta', 'Masculino', 9, 'Nenhuma', 'Nenhuma', 'Nenhuma', 'Trauma no tornozelo após queda', 'BAIXA PRIORIDADE', 'BAIXA PRIORIDADE', 'AGUARDANDO'),
+            ('Ana Oliveira', 81, '95/60', 110, 24, 38.5, 91, 'Sonolento', 'Feminino', 2, 'DPOC', 'Dipirona', 'Salbutamol', 'Falta de ar e confusão mental', 'PRIORIDADE MÁXIMA', 'PRIORIDADE MÁXIMA', 'AGUARDANDO'),
         ]
+        
+        # Using a dictionary for insertion makes the code robust against schema changes.
         for p in pacientes_exemplo:
+            data_dict = {
+                "id": str(uuid.uuid4()), "Nome": p[0], "Idade": p[1], "PA": p[2], "FC": p[3], "FR": p[4], "Temp": p[5], 
+                "SpO2": p[6], "nivel_consciencia": p[7], "genero": p[8], "intensidade_dor": p[9], "Comorbidade": p[10], 
+                "Alergia": p[11], "medicacoes": p[12], "Queixa_Principal": p[13], "urgencia_automatica": p[14],
+                "urgencia_manual": p[15], "status": p[16], "data_cadastro": datetime.now()
+            }
             cursor.execute("""
-                INSERT INTO avicena_care.triagem (id, Nome, Idade, PA, FC, FR, Temp, Comorbidade, Alergia, Queixa_Principal, urgencia_automatica, urgencia_manual, status, data_cadastro)
-                VALUES (uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-            """, (p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11]))
+                INSERT INTO avicena_care.triagem (
+                    -- TODO: Update table name and columns to match your schema
+                    id, Nome, Idade, PA, FC, FR, Temp, SpO2, nivel_consciencia, genero, intensidade_dor, 
+                    Comorbidade, Alergia, Queixa_Principal, urgencia_automatica, urgencia_manual, status, data_cadastro, medicacoes
+                )
+                VALUES (
+                    %(id)s, %(Nome)s, %(Idade)s, %(PA)s, %(FC)s, %(FR)s, %(Temp)s, %(SpO2)s, %(nivel_consciencia)s, 
+                    %(genero)s, %(intensidade_dor)s, %(Comorbidade)s, %(Alergia)s, %(Queixa_Principal)s, 
+                    %(urgencia_automatica)s, %(urgencia_manual)s, %(status)s, %(data_cadastro)s, %(medicacoes)s
+                )
+            """, data_dict)
 
-with conn.cursor() as cursor:
-    load_initial_data(cursor)
-
-def get_data(incluir_atendidos: bool = False):
+def get_data(status_filter: str = 'AGUARDANDO'):
     """Busca dados de pacientes do banco"""
-    if incluir_atendidos:
+    # Garante que o banco de dados e os dados iniciais existam antes de buscar
+    if status_filter == 'TODOS':
+        # TODO: Update with your table name
         query = "SELECT * FROM avicena_care.triagem ORDER BY data_cadastro DESC"
+    elif status_filter == 'ATENDIDO':
+        # TODO: Update with your table name
+        query = "SELECT * FROM avicena_care.triagem WHERE status='ATENDIDO' ORDER BY data_atendimento DESC"
     else:
-        query = "SELECT * FROM avicena_care.triagem WHERE status='AGUARDANDO' ORDER BY data_cadastro DESC"
-    with conn.cursor() as cursor:
+        # TODO: Update with your table name
+        query = f"SELECT * FROM avicena_care.triagem WHERE status='{status_filter}' ORDER BY data_cadastro DESC" 
+    
+    with db_conn.cursor() as cursor:
         cursor.execute(query)
-        return cursor.fetchall_pandas()
+        
+        # PERMANENT FIX: Use the standard DB-API 2.0 method to fetch data.
+        # This is more robust and avoids the specific 'fetchall_pandas()' method
+        # which is sensitive to connection state corruption.
+        columns = [desc[0] for desc in cursor.description]
+        data = cursor.fetchall()
+        return pd.DataFrame(data, columns=columns)
 
 def get_atendidos():
-    """Busca pacientes já atendidos"""
-    query = "SELECT * FROM avicena_care.triagem WHERE status='ATENDIDO' ORDER BY data_atendimento DESC"
-    with conn.cursor() as cursor:
-        cursor.execute(query)
-        return cursor.fetchall_pandas()
+    """Busca pacientes já atendidos. Wrapper around get_data for backward compatibility."""
+    return get_data(status_filter='ATENDIDO')
 
 def calcular_urgencia(
     temperatura,
@@ -357,9 +396,10 @@ def mostrar_fila_pacientes(df):
                 
                 with col_btn:
                     if st.button("✓", key=f"btn_urgencia_{paciente['id']}", help="Atualizar urgência", type="secondary"):
-                        cursor = conn.cursor()
+                        cursor = db_conn.cursor()
                         cursor.execute(
-                            "UPDATE avicena_care.triagem SET urgencia_manual = %s WHERE id = %s",
+                            # TODO: Update with your table name
+                            "UPDATE avicena_care.triagem SET urgencia_manual = ? WHERE id = ?",
                             (nova_urgencia, str(paciente['id']))
                         )
                         
@@ -370,9 +410,10 @@ def mostrar_fila_pacientes(df):
             with col_atender:
                 st.markdown("**✅ Finalizar Atendimento**")
                 if st.button("🏥 Marcar como Atendido", key=f"btn_atendido_{paciente['id']}", type="primary", use_container_width=True):
-                    cursor = conn.cursor()
+                    cursor = db_conn.cursor()
                     cursor.execute(
-                        "UPDATE avicena_care.triagem SET status = 'ATENDIDO', data_atendimento = now() WHERE id = %s",
+                        # TODO: Update with your table name
+                        "UPDATE avicena_care.triagem SET status = 'ATENDIDO', data_atendimento = now() WHERE id = ?",
                         (str(paciente['id']),)
                     )
                     st.success(f"✅ {paciente['Nome']} marcado como atendido!")
@@ -470,8 +511,9 @@ def mostrar_form_novo_paciente():
         
         # Intensidade da Dor (Escala EVA)
         st.markdown("**Intensidade da Dor (0-10):**")
-        intensidade_dor = st.slider("", min_value=0, max_value=10, value=0, 
-                                     help="0 = Sem dor | 10 = Dor máxima insuportável")
+        intensidade_dor = st.slider("Intensidade da Dor (0-10)", min_value=0, max_value=10, value=0, 
+                                     help="0 = Sem dor | 10 = Dor máxima insuportável",
+                                     label_visibility="collapsed")
         
         # Seção: Histórico Médico
         st.markdown("#### 📋 Histórico Médico")
@@ -479,6 +521,7 @@ def mostrar_form_novo_paciente():
         
         with col5:
             comorbidades = st.text_area("Comorbidades Pré-existentes", 
+                                       key="comorbidades",
                                        placeholder="Ex: Diabetes, Hipertensão, Asma...",
                                        height=100)
             medicacoes = st.text_area("Medicações de Uso Contínuo", 
@@ -521,33 +564,42 @@ def mostrar_form_novo_paciente():
                 
                 # Salvar no banco de dados
                 try:
-                    cursor = conn.cursor()
+                    # Using a dictionary for insertion is safer and more readable
+                    patient_insert_data = {
+                        "id": str(uuid.uuid4()),
+                        "Nome": nome,
+                        "Idade": int(idade),
+                        "PA": f"{int(pa_sistolica)}/{int(pa_diastolica)}",
+                        "FC": int(freq_cardiaca),
+                        "FR": int(freq_respiratoria),
+                        "Temp": float(temperatura),
+                        "Comorbidade": comorbidades if comorbidades else "Nenhuma",
+                        "Alergia": alergias if alergias else "Nenhuma",
+                        "Queixa_Principal": queixa,
+                        "urgencia_automatica": urgencia[0],
+                        "urgencia_manual": urgencia[0],
+                        "status": 'AGUARDANDO',
+                        "SpO2": int(spo2),
+                        "nivel_consciencia": nivel_consciencia,
+                        "genero": genero,
+                        "intensidade_dor": int(intensidade_dor),
+                        "medicacoes": medicacoes if medicacoes else "Nenhuma",
+                        "data_cadastro": datetime.now()
+                    }
+                    cursor = db_conn.cursor()
                     cursor.execute("""
+                        -- TODO: Update with your table name and columns
                         INSERT INTO avicena_care.triagem (
                             id, Nome, Idade, PA, FC, FR, Temp, Comorbidade, Alergia,
                             Queixa_Principal, urgencia_automatica, urgencia_manual, status,
-                            SpO2, nivel_consciencia, genero, intensidade_dor, data_cadastro
-                        ) VALUES (uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-                    """, (
-                        nome,
-                        int(idade),
-                        f"{int(pa_sistolica)}/{int(pa_diastolica)}",
-                        int(freq_cardiaca),
-                        int(freq_respiratoria),
-                        float(temperatura),
-                        comorbidades if comorbidades else "Nenhuma",
-                        alergias if alergias else "Nenhuma",
-                        queixa,
-                        urgencia[0],  # urgencia_automatica
-                        urgencia[0],  # urgencia_manual (inicialmente igual)
-                        'AGUARDANDO',
-                        int(spo2),
-                        nivel_consciencia,
-                        genero,
-                        int(intensidade_dor)
-                    ))
+                            SpO2, nivel_consciencia, genero, intensidade_dor, data_cadastro, medicacoes
+                        ) VALUES (
+                            %(id)s, %(Nome)s, %(Idade)s, %(PA)s, %(FC)s, %(FR)s, %(Temp)s, %(Comorbidade)s, %(Alergia)s,
+                            %(Queixa_Principal)s, %(urgencia_automatica)s, %(urgencia_manual)s, %(status)s,
+                            %(SpO2)s, %(nivel_consciencia)s, %(genero)s, %(intensidade_dor)s, %(data_cadastro)s, %(medicacoes)s
+                        )
+                    """, patient_insert_data)
                     
-
                     st.success(f"✅ Paciente {nome} cadastrado com sucesso!")
                     
                     # === CALCULAR SCORES CLÍNICOS PRIMEIRO (necessário para validação) ===
@@ -694,7 +746,7 @@ def mostrar_form_novo_paciente():
                         st.markdown(f"#### {cor_map.get(gcs['cor'], '⚪')} GCS")
                         st.metric("Score", f"{gcs['score']}/15")
                         st.markdown(f"**{gcs['alerta']}**")
-                        st.markdown(f"*{gcs['descricao']}*")
+                        st.markdown(f"*{gcs.get('descricao', 'N/A')}*")
                     
                     # Escala de Dor
                     with col_dor:
@@ -1197,7 +1249,8 @@ def mostrar_analise_clinica(df):
         
         with col4:
             criticos = len(df[df['urgencia_manual'] == 'PRIORIDADE MÁXIMA']) if 'urgencia_manual' in df.columns else 0
-            altos = len(df[df['urgencia_manual'] == 'ALTA PRIORIDADE']) if 'urgencia_manual' in df.columns else 0
+            altos = len(df[df['urgencia_manual'] == 'ALTA PRIORIDADE']) if 'urgencia_manual' in df.columns else 0 # This was duplicated, keeping one.
+
             pct_critico = (criticos / total * 100) if total > 0 else 0
             st.metric("🚨 Taxa Críticos", f"{pct_critico:.1f}%",
                      help="% vermelhos/laranjas",
@@ -1354,357 +1407,6 @@ def mostrar_analise_clinica(df):
             )
             
             st.plotly_chart(fig_gauge3, use_container_width=True, config={'displayModeBar': False})
-
-def mostrar_relatorios(df):
-    
-    if df.empty:
-        st.info("📊 Nenhum dado disponível para análise.")
-        return
-    
-    # Configuração de tema claro para os gráficos com texto escuro
-    template = "plotly_white"
-    
-    # Configuração global de fonte escura para TODOS os gráficos
-    config_layout = {
-        'plot_bgcolor': 'white',
-        'paper_bgcolor': 'white',
-        'font': dict(
-            family='Arial, sans-serif',
-            size=13,
-            color='#000000'  # Preto puro para máxima legibilidade
-        ),
-        'title': dict(
-            font=dict(size=14, color='#000000', family='Arial, sans-serif')
-        ),
-        'xaxis': dict(
-            title_font=dict(size=13, color='#000000'),
-            tickfont=dict(size=12, color='#000000'),
-            color='#000000'
-        ),
-        'yaxis': dict(
-            title_font=dict(size=13, color='#000000'),
-            tickfont=dict(size=12, color='#000000'),
-            color='#000000'
-        ),
-        'legend': dict(
-            font=dict(size=12, color='#000000'),
-            title=dict(font=dict(size=12, color='#000000')),
-            bgcolor='rgba(255, 255, 255, 0.9)',
-            bordercolor='#cbd5e1',
-            borderwidth=1
-        ),
-        'hoverlabel': dict(
-            bgcolor='white',
-            font_size=12,
-            font_family='Arial, sans-serif',
-            font_color='#000000',
-            bordercolor='#cbd5e1'
-        ),
-        'coloraxis': dict(
-            colorbar=dict(
-                tickfont=dict(color='#000000'),
-                title=dict(font=dict(color='#000000'))
-            )
-        )
-    }
-    
-    # ========== SEÇÃO 1: PANORAMA DE RISCO ==========
-    st.markdown("#### 🎯 Panorama de Risco - Distribuição por Prioridade PCACR")
-    
-    if 'urgencia_manual' in df.columns:
-        # Contar pacientes por prioridade
-        prioridade_counts = df['urgencia_manual'].value_counts()
-        
-        # Cores e ordem PCACR
-        cores_prioridade = {
-            'PRIORIDADE MÁXIMA': '#dc2626',
-            'ALTA PRIORIDADE': '#ea580c',
-            'MÉDIA PRIORIDADE': '#eab308',
-            'BAIXA PRIORIDADE': '#16a34a',
-            'MÍNIMA (ELETIVA)': '#2563eb'
-        }
-        
-        col1, col2 = st.columns([3, 2])
-        
-        with col1:
-            # Gráfico de barras horizontal com tempos-alvo
-            prioridade_df = pd.DataFrame({
-                'Prioridade': prioridade_counts.index,
-                'Pacientes': prioridade_counts.values
-            })
-            
-            fig_barras = px.bar(
-                prioridade_df, 
-                y='Prioridade', 
-                x='Pacientes',
-                color='Prioridade',
-                color_discrete_map=cores_prioridade,
-                orientation='h',
-                text='Pacientes',
-                labels={'Pacientes': 'Número de Pacientes'},
-                template=template
-            )
-            
-            fig_barras.update_traces(textposition='outside', textfont=dict(size=13, color='#000000'))
-            
-            # Merge config_layout com yaxis customizado
-            layout_barras = config_layout.copy()
-            layout_barras['yaxis'] = {
-                'categoryorder': 'array', 
-                'categoryarray': ['MÍNIMA (ELETIVA)', 'BAIXA PRIORIDADE', 'MÉDIA PRIORIDADE', 'ALTA PRIORIDADE', 'PRIORIDADE MÁXIMA'],
-                'title_font': dict(size=13, color='#000000'),
-                'tickfont': dict(size=12, color='#000000')
-            }
-            
-            fig_barras.update_layout(
-                showlegend=False,
-                height=350,
-                **layout_barras
-            )
-            
-            st.plotly_chart(fig_barras, use_container_width=True)
-        
-        with col2:
-            # Pizza com proporção geral
-            fig_pizza = px.pie(
-                values=prioridade_counts.values, 
-                names=prioridade_counts.index,
-                title='Proporção de Urgências',
-                color=prioridade_counts.index,
-                color_discrete_map=cores_prioridade,
-                template=template
-            )
-            
-            fig_pizza.update_layout(
-                height=350,
-                **config_layout
-            )
-            
-            fig_pizza.update_traces(
-                textfont=dict(size=14, color='#000000', family='Arial'),
-                textposition='inside',
-                insidetextorientation='radial',
-                marker=dict(line=dict(color='white', width=2))
-            )
-            
-            st.plotly_chart(fig_pizza, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # ========== SEÇÃO 2: MATRIZ PA × FC (INSTABILIDADE HEMODINÂMICA) ==========
-    st.markdown("#### 💓 Matriz PA × FC - Correlação Hemodinâmica")
-    st.caption("Identifica pacientes em choque, hipertensão ou instabilidade cardiovascular")
-    
-    if 'PA' in df.columns and 'FC' in df.columns:
-        # Extrair PA sistólica
-        df_hemo = df.copy()
-        df_hemo['PA_Sistolica'] = df_hemo['PA'].apply(lambda x: int(str(x).split('/')[0]) if '/' in str(x) else None)
-        df_hemo = df_hemo.dropna(subset=['PA_Sistolica', 'FC'])
-        
-        # Scatter plot PA x FC
-        fig_scatter = px.scatter(
-            df_hemo, 
-            x='FC', 
-            y='PA_Sistolica',
-            color='urgencia_manual',
-            color_discrete_map=cores_prioridade if 'urgencia_manual' in df.columns else None,
-            size=[15]*len(df_hemo),
-            hover_data=['Nome'] if 'Nome' in df.columns else None,
-            labels={'FC': 'Frequência Cardíaca (bpm)', 'PA_Sistolica': 'PA Sistólica (mmHg)'},
-            template=template
-        )
-        
-        # Adicionar zonas de referência
-        fig_scatter.add_hrect(y0=90, y1=140, line_width=0, fillcolor="green", opacity=0.1, annotation_text="PA Normal", annotation_position="right")
-        fig_scatter.add_hrect(y0=140, y1=200, line_width=0, fillcolor="orange", opacity=0.1, annotation_text="Hipertensão", annotation_position="right")
-        fig_scatter.add_hrect(y0=0, y1=90, line_width=0, fillcolor="red", opacity=0.1, annotation_text="Hipotensão/Choque", annotation_position="right")
-        
-        fig_scatter.add_vrect(x0=60, x1=100, line_width=0, fillcolor="green", opacity=0.08)
-        fig_scatter.add_vrect(x0=100, x1=200, line_width=0, fillcolor="orange", opacity=0.08)
-        
-        fig_scatter.update_layout(
-            height=450,
-            **config_layout
-        )
-        
-        st.plotly_chart(fig_scatter, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # ========== SEÇÃO 3: RADAR CHART - PERFIL DE SINAIS VITAIS ==========
-    st.markdown("#### 🎯 Perfil de Sinais Vitais - Radar de Alterações")
-    st.caption("Mostra quais parâmetros estão mais alterados na população")
-    
-    # Calcular alterações por parâmetro
-    alteracoes = {
-        'Febre (>37.5°C)': len(df[df['Temp'] > 37.5]) if 'Temp' in df.columns else 0,
-        'Taquicardia (FC>100)': len(df[df['FC'] > 100]) if 'FC' in df.columns else 0,
-        'Taquipneia (FR>20)': len(df[df['FR'] > 20]) if 'FR' in df.columns else 0,
-        'Hipotensão (PA<90)': len(df[df['PA'].apply(lambda x: int(str(x).split('/')[0]) < 90 if '/' in str(x) else False)]) if 'PA' in df.columns else 0,
-        'Consciência Alt.': len(df[df.get('Nivel_Consciencia', 'Alerta') != 'Alerta']) if 'Nivel_Consciencia' in df.columns else 0
-    }
-    
-    total = len(df)
-    alteracoes_pct = {k: (v/total)*100 if total > 0 else 0 for k, v in alteracoes.items()}
-    
-    fig_radar = go.Figure()
-    
-    fig_radar.add_trace(go.Scatterpolar(
-        r=list(alteracoes_pct.values()),
-        theta=list(alteracoes_pct.keys()),
-        fill='toself',
-        fillcolor='rgba(3, 102, 114, 0.3)',
-        line=dict(color='#036672', width=2),
-        name='% Alterado'
-    ))
-    
-    fig_radar.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True, 
-                range=[0, 100], 
-                ticksuffix='%',
-                tickfont=dict(size=12, color='#000000')
-            ),
-            bgcolor='white',
-            angularaxis=dict(
-                tickfont=dict(size=12, color='#000000')
-            )
-        ),
-        showlegend=False,
-        height=400,
-        title=dict(
-            text='Percentual de Pacientes com Alterações',
-            font=dict(size=14, color='#000000')
-        ),
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        font=dict(
-            family='Arial, sans-serif',
-            size=13,
-            color='#000000'
-        )
-    )
-    
-    st.plotly_chart(fig_radar, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # ========== SEÇÃO 4: INDICADORES CLÍNICOS CRÍTICOS ==========
-    st.markdown("#### ⚠️ Indicadores Clínicos Críticos")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        choque = 0
-        if 'PA' in df.columns and 'FC' in df.columns:
-            df_temp = df.copy()
-            df_temp['PA_Sist'] = df_temp['PA'].apply(lambda x: int(str(x).split('/')[0]) if '/' in str(x) else 999)
-            choque = len(df_temp[(df_temp['PA_Sist'] < 90) & (df_temp['FC'] > 100)])
-        
-        st.metric("🩸 Choque Possível", choque, 
-                 help="PA sistólica <90 + FC >100",
-                 delta="Crítico" if choque > 0 else "Normal")
-    
-    with col2:
-        sepse_risco = 0
-        if all(col in df.columns for col in ['Temp', 'FC', 'FR']):
-            sepse_risco = len(df[(df['Temp'] > 38) & (df['FC'] > 90) & (df['FR'] > 20)])
-        
-        st.metric("🦠 Risco de Sepse", sepse_risco,
-                 help="Febre + Taquicardia + Taquipneia",
-                 delta="Atenção" if sepse_risco > 0 else "Normal")
-    
-    with col3:
-        insuf_resp = 0
-        if 'FR' in df.columns:
-            insuf_resp = len(df[(df['FR'] < 10) | (df['FR'] > 25)])
-        
-        st.metric("🫁 Insuf. Respiratória", insuf_resp,
-                 help="FR <10 ou >25 irpm",
-                 delta="Alerta" if insuf_resp > 0 else "Normal")
-    
-    with col4:
-        criticos_total = 0
-        if 'urgencia_manual' in df.columns:
-            criticos_total = len(df[df['urgencia_manual'].isin(['PRIORIDADE MÁXIMA', 'ALTA PRIORIDADE'])])
-        
-        pct_critico = (criticos_total/total*100) if total > 0 else 0
-        st.metric("🚨 Taxa de Críticos", f"{pct_critico:.0f}%",
-                 help="% de pacientes vermelhos/laranjas",
-                 delta=f"{criticos_total}/{total}")
-    
-    st.markdown("---")
-    
-    # ========== SEÇÃO 5: SCATTER PLOT COM DENSIDADE ==========
-    if 'Temp' in df.columns and 'FC' in df.columns and len(df) > 3:
-        st.markdown("#### 🌡️ Correlação: Temperatura × Frequência Cardíaca")
-        st.caption("Distribuição de pacientes - cada ponto representa um paciente")
-        
-        # Criar dataframe completamente novo e limpo
-        temp_data = df['Temp'].values
-        fc_data = df['FC'].values
-        
-        # Remover NaN
-        mask = ~(pd.isna(temp_data) | pd.isna(fc_data))
-        temp_clean = temp_data[mask]
-        fc_clean = fc_data[mask]
-        
-        # Adicionar prioridade se existir
-        if 'urgencia_manual' in df.columns:
-            prioridade_data = df['urgencia_manual'].values[mask]
-            nome_data = df['Nome'].values[mask] if 'Nome' in df.columns else ['Paciente'] * len(temp_clean)
-            
-            scatter_df = pd.DataFrame({
-                'Temperatura': temp_clean,
-                'FrequenciaCardiaca': fc_clean,
-                'Prioridade': prioridade_data,
-                'Nome': nome_data
-            })
-            
-            cores_prioridade = {
-                'PRIORIDADE MÁXIMA': '#dc2626',
-                'ALTA PRIORIDADE': '#ea580c',
-                'MÉDIA PRIORIDADE': '#eab308',
-                'BAIXA PRIORIDADE': '#16a34a',
-                'MÍNIMA (ELETIVA)': '#2563eb'
-            }
-            
-            fig_scatter = px.scatter(
-                scatter_df, 
-                x='FrequenciaCardiaca', 
-                y='Temperatura',
-                color='Prioridade',
-                color_discrete_map=cores_prioridade,
-                hover_data=['Nome'],
-                size=[12]*len(scatter_df),
-                labels={'FrequenciaCardiaca': 'Frequência Cardíaca (bpm)', 'Temperatura': 'Temperatura (°C)'},
-                template=template
-            )
-        else:
-            scatter_df = pd.DataFrame({
-                'Temperatura': temp_clean,
-                'FrequenciaCardiaca': fc_clean
-            })
-            
-            fig_scatter = px.scatter(
-                scatter_df, 
-                x='FrequenciaCardiaca', 
-                y='Temperatura',
-                labels={'FrequenciaCardiaca': 'Frequência Cardíaca (bpm)', 'Temperatura': 'Temperatura (°C)'},
-                template=template
-            )
-        
-        # Adicionar zonas de referência
-        fig_scatter.add_hrect(y0=36, y1=37.5, line_width=0, fillcolor="green", opacity=0.1, annotation_text="Normal", annotation_position="left")
-        fig_scatter.add_hrect(y0=37.5, y1=100, line_width=0, fillcolor="red", opacity=0.1, annotation_text="Febre", annotation_position="left")
-        
-        fig_scatter.update_layout(
-            height=450,
-            **config_layout
-        )
-        
-        st.plotly_chart(fig_scatter, use_container_width=True)
 
 def mostrar_relatorios(df):
     """Relatórios e estatísticas"""
@@ -2638,6 +2340,74 @@ def mostrar_interface_enfermeiro_completa():
 def mostrar_interface_medico_completa():
     """Interface completa para médicos: Dashboard, Lista, Análise Clínica, Relatórios e Novo Paciente"""
 
+    # Carregar dados
+    df = get_data()
+
+    # CSS para link de logout
+    st.markdown("""
+    <style>
+    .logout-link {
+        color: #ffffff !important;
+        text-decoration: none !important;
+        font-size: 0.85rem;
+        font-weight: 400;
+        transition: opacity 0.2s;
+        cursor: pointer;
+        margin-left: 20px;
+    }
+    .logout-link:hover {
+        opacity: 0.8;
+        text-decoration: underline !important;
+        color: #ffffff !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Header principal
+    brand_header = """
+    <div class='ac-global-header'>
+        <div class='ac-header-wrap'>
+                <div class='ac-brand'>
+                        <div class='ac-logo'>⚕️</div>
+                        <div class='ac-text'>
+                                    <div class='ac-title'>Avicena Care - Médico</div>
+                                    <div class='ac-sub'>Análise Clínica e Preditiva</div>
+                        </div>
+                </div>
+                <div style='display: flex; align-items: center;'>
+                    <div class='ac-status-pill'><span></span> PCACR Ativo</div>
+                    <a href='?logout=true' class='logout-link' target='_self'>🚪 Sair</a>
+                </div>
+        </div>
+    </div>
+    """
+    st.markdown(brand_header, unsafe_allow_html=True)
+
+    mostrar_dashboard_kpis(df)
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # Definir abas
+    tabs = ["🧾 Fila de Atendimento", "➕ Novo Paciente", "📊 Análise Clínica", "📋 Histórico"]
+    if ML_AVAILABLE:
+        tabs.insert(3, "🤖 Análise Preditiva")
+        tab_lista, tab_novo, tab_analise, tab_ml, tab_historico = st.tabs(tabs)
+    else:
+        # If ML is not available, there are only 4 tabs
+        tab_lista, tab_novo, tab_analise, tab_historico = st.tabs(tabs)
+        tab_ml = None # Explicitly set tab_ml to None if not available
+
+    with tab_lista:
+        mostrar_fila_pacientes(df)
+
+    with tab_novo:
+        mostrar_form_novo_paciente()
+
+    with tab_analise:
+        mostrar_analise_clinica(df)
+
+    with tab_historico:
+        mostrar_historico_atendimentos()
+
     if ML_AVAILABLE:
         with tab_ml:
             st.markdown("### 🤖 Análise Preditiva Baseada em ML")
@@ -2834,7 +2604,6 @@ def mostrar_interface_medico_completa():
                         # Ordenar por importância
                         sorted_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:10]
                         
-                        import pandas as pd
                         df_importance = pd.DataFrame(sorted_features, columns=['Fator', 'Importância'])
                         
                         # Traduzir nomes
@@ -2979,7 +2748,18 @@ def mostrar_historico_atendimentos():
     if filtro_nome:
         df_atendidos = df_atendidos[df_atendidos['Nome'].str.contains(filtro_nome, case=False, na=False)]
 
-    # TODO: Implementar filtro de período
+    if filtro_periodo != "Todos":
+        df_atendidos['data_atendimento'] = pd.to_datetime(df_atendidos['data_atendimento'])
+        now = datetime.now()
+        if filtro_periodo == "Hoje":
+            df_atendidos = df_atendidos[df_atendidos['data_atendimento'].dt.date == now.date()]
+        elif filtro_periodo == "Última semana":
+            start_date = now - pd.Timedelta(days=7)
+            df_atendidos = df_atendidos[df_atendidos['data_atendimento'] >= start_date]
+        elif filtro_periodo == "Último mês":
+            start_date = now - pd.Timedelta(days=30)
+            df_atendidos = df_atendidos[df_atendidos['data_atendimento'] >= start_date]
+
 
     for _, paciente in df_atendidos.iterrows():
         urgencia = paciente['urgencia_manual']
@@ -3006,24 +2786,26 @@ def mostrar_historico_atendimentos():
                 st.write(f"**Atendimento:** {data_atend_str}")
                 
                 if st.button("↩️ Retornar à Fila", key=f"retornar_{paciente['id']}"):
-                    with conn.cursor() as cursor:
-                        cursor.execute("UPDATE avicena_care.triagem SET status = 'AGUARDANDO', data_atendimento = NULL WHERE id = %s", (str(paciente['id']),))
+                    with db_conn.cursor() as cursor:
+                        # TODO: Update with your table name
+                        cursor.execute("UPDATE avicena_care.triagem SET status = 'AGUARDANDO', data_atendimento = NULL WHERE id = ?", (str(paciente['id']),))
                     st.success(f"✅ {paciente['Nome']} retornou à fila!")
                     time.sleep(0.5)
                     st.rerun()
-    
-    with tab_relatorios:
-        mostrar_relatorios(df)
 
 # Inicializar estado da sessão para controle da tela
-if 'tipo_acesso' not in st.session_state:
-    st.session_state['tipo_acesso'] = None
+def main():
+    """Função principal que controla o fluxo da aplicação."""
+    # Inicializar estado da sessão para controle da tela
+    if 'tipo_acesso' not in st.session_state:
+        st.session_state['tipo_acesso'] = None
+
+    if st.session_state['tipo_acesso'] is None:
+        show_welcome_screen()
+        return
     
-# ==================== FLUXO PRINCIPAL DA APLICAÇÃO ====================
-if st.session_state['tipo_acesso'] is None:
-    show_welcome_screen()
-else:
-    # Cabeçalho do sistema
+    # Definir variáveis de perfil após a verificação de login
+    # Estas definições estavam faltando dentro do escopo da função 'main'.
     tipo_profissional = "Médico(a)" if st.session_state['tipo_acesso'] == 'medico' else "Enfermeiro(a)"
     emoji_profissional = "👨‍⚕️" if st.session_state['tipo_acesso'] == 'medico' else "👩‍⚕️"
     
@@ -3043,5 +2825,13 @@ else:
     # Interface baseada no tipo de acesso
     if st.session_state['tipo_acesso'] == 'enfermeiro':
         mostrar_interface_enfermeiro_completa()
-    else:  # medico
+    elif st.session_state['tipo_acesso'] == 'medico':
         mostrar_interface_medico_completa()
+
+if __name__ == "__main__":
+    # Inicializa a conexão e o banco de dados uma única vez no início
+    db_conn = init_databricks_connection()
+    with db_conn.cursor() as cursor:
+        load_initial_data(cursor)
+    
+    main()

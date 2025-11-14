@@ -123,26 +123,8 @@ def prepare_features(df):
     
     return X, feature_cols
 
-def train_pcacr_model():
-    """Treina o modelo de classificação PCACR"""
-    print("🏥 Iniciando treinamento do modelo PCACR...")
-    
-    # Carregar dataset
-    print("📊 Carregando dados de treinamento do Databricks...")
-    
-    # Inicializar conexão com Databricks SQL Warehouse
-    with sql.connect(
-        server_hostname=st.secrets["databricks"]["server_hostname"],
-        http_path=st.secrets["databricks"]["http_path"],
-        access_token=st.secrets["databricks"]["access_token"],
-    ) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM avicena_care.triagem")
-            df = cursor.fetchall_pandas()
-    
-    print(f"   Dataset carregado: {len(df)} registros")
-    
-    # Criar classificação PCACR baseada nos dados clínicos
+def train_pcacr_model(df):
+    """Treina o modelo de classificação PCACR a partir de um DataFrame."""
 
     print("🎯 Criando classificações PCACR...")
     df['PCACR_Class'] = df.apply(map_to_pcacr, axis=1)
@@ -217,8 +199,22 @@ def train_pcacr_model():
     return model, scaler, feature_cols, feature_importance
 
 if __name__ == "__main__":
+    # This block only runs when the script is executed directly.
+    # All database logic is now safely contained here.
+    # --- IMPORTANT: For training, we use the large local dataset, not the live DB ---
     try:
-        model, scaler, features, importance = train_pcacr_model()
+        print("📊 Carregando dados de treinamento do arquivo local 'data/Dataset.csv'...")
+        # Carregar o dataset de treinamento com 50.000 registros
+        df = pd.read_csv('data/Dataset.csv', nrows=50000)
+        print(f"   Dataset carregado: {len(df)} registros")
+
+        # Preencher valores ausentes com a mediana da coluna (estratégia robusta)
+        print("⚙️  Limpando e preparando dados...")
+        for col in df.columns:
+            if df[col].isnull().any():
+                df[col].fillna(df[col].median(), inplace=True)
+
+        model, scaler, features, importance = train_pcacr_model(df)
     except Exception as e:
         print(f"\n❌ Erro durante treinamento: {str(e)}")
         import traceback
